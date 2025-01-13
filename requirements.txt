@@ -3,3 +3,4 @@ pandas==2.2.3
 unstructured-ingest==0.3.12
 unstructured-ingest[remote]
 unstructured[all-docs]==0.13.7
+python-dotenv==1.0.1
