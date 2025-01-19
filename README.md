@@ -28,4 +28,10 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+4. Every time while opening a new project activate the virtual environment:
+
+```bash
+.venv\Scripts\activate
+```
+
 By following these steps, everyone in the team will work with the same development environment, making collaboration smoother.
