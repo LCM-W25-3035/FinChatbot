@@ -7,6 +7,12 @@ Master Doc link: https://mylambton-my.sharepoint.com/:w:/r/personal/c0925614_myl
 
 PPT Presentation link: https://mylambton-my.sharepoint.com/:p:/r/personal/c0925614_mylambton_ca/Documents/Financial_Chatbot_Master_Group_6.pptx?d=wd2b76349f0534b1d83ec880c9207fcac&csf=1&web=1&e=bC9ybf
 
+Project Proposal Doc Link: https://mylambton-my.sharepoint.com/:w:/g/personal/c0925614_mylambton_ca/EfrRO3hp9UZBi1zPUlNOMo0Bk26Vtk3NhKZQGW1vs6ESlA?e=6uafb2
+
+Project Proposal PPT Link: https://mylambton-my.sharepoint.com/:p:/g/personal/c0925614_mylambton_ca/EdXqFegBiPZJreZPigQXkmoBZUN8nfwfnnxY_6eXUWEX7A?e=yegcHK
+
+Tasks Division Doc Link: https://mylambton-my.sharepoint.com/:x:/g/personal/c0925614_mylambton_ca/EQCbi-c_n4FDjOuVVkEU5jEBmYRiBPo2Nkid7IiRczughQ?e=FitCiX
+
 
 ### Setup and installation
 
@@ -26,6 +32,12 @@ python -m venv .venv
 
 ```bash
 pip install -r requirements.txt
+```
+
+4. Every time while opening a new project activate the virtual environment:
+
+```bash
+.venv\Scripts\activate
 ```
 
 By following these steps, everyone in the team will work with the same development environment, making collaboration smoother.
