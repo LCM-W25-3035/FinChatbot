@@ -8,6 +8,17 @@ unstructured_api_url = os.getenv("UNSTRUCTURED_API_URL")
 unstructured_api_key = os.getenv("UNSTRUCTURED_API_KEY")
 
 def get_data(file_bytes):
+    """
+    Process a PDF file using the Unstructured API to extract tables and text content.
+
+    Args:
+        file_bytes: Bytes object containing the PDF file content
+        
+    Returns:
+        lists: A pair of 2 lists containing:
+            - tables (list): HTML representations of tables found in the PDF
+            - texts (list): Extracted text content from narrative and uncategorized sections
+    """
     url = unstructured_api_url
 
     headers = {
