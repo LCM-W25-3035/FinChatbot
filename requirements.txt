@@ -4,3 +4,8 @@ unstructured-ingest==0.3.12
 unstructured-ingest[remote]
 unstructured[all-docs]==0.13.7
 python-dotenv==1.0.1
+langchain-core==0.3.29
+langchain-openai==0.3.0
+streamlit==1.41.1
+
+-e .
