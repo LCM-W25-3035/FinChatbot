@@ -9,6 +9,8 @@ PPT Presentation link: https://mylambton-my.sharepoint.com/:p:/r/personal/c09256
 
 Project Proposal Doc Link: https://mylambton-my.sharepoint.com/:w:/g/personal/c0925614_mylambton_ca/EfrRO3hp9UZBi1zPUlNOMo0Bk26Vtk3NhKZQGW1vs6ESlA?e=6uafb2
 
+Project Proposal PPT Link: https://mylambton-my.sharepoint.com/:p:/g/personal/c0925614_mylambton_ca/EdXqFegBiPZJreZPigQXkmoBZUN8nfwfnnxY_6eXUWEX7A?e=yegcHK
+
 Tasks Division Doc Link: https://mylambton-my.sharepoint.com/:x:/g/personal/c0925614_mylambton_ca/EQCbi-c_n4FDjOuVVkEU5jEBmYRiBPo2Nkid7IiRczughQ?e=FitCiX
 
 
