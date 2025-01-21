@@ -1,6 +1,6 @@
 import streamlit as st
 from dotenv import load_dotenv, find_dotenv
-from src.utils.extraction import get_data
+from FinChatbot.pipeline.extraction import get_data
 
 load_dotenv(find_dotenv())
 
