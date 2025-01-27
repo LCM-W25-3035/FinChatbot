@@ -15,10 +15,11 @@ from unstructured_ingest.v2.processes.connectors.local import (
 from unstructured_ingest.v2.processes.partitioner import PartitionerConfig
 from werkzeug.utils import secure_filename
 import streamlit as st
-from config import UNSTRUCTURED_API_KEY, UNSTRUCTURED_API_URL
+from dotenv import load_dotenv, find_dotenv
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+load_dotenv(find_dotenv())
 
 # Function to extract data from PDF
 # Function to extract and process data from the uploaded PDF
@@ -30,8 +31,8 @@ def extract_pdf_data(pdf_path):
         source_connection_config=LocalConnectionConfig(),
         partitioner_config=PartitionerConfig(
             partition_by_api=True,
-            api_key=UNSTRUCTURED_API_KEY,
-            partition_endpoint=UNSTRUCTURED_API_URL,
+            api_key=os.getenv("UNSTRUCTURED_API_KEY"),
+            partition_endpoint=os.getenv("UNSTRUCTURED_API_URL"),
             strategy="hi_res",
             additional_partition_args={
                 "split_pdf_page": True,
