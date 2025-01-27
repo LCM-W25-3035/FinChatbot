@@ -1,11 +1,9 @@
-numpy==2.2.1
-pandas==2.2.3
-unstructured-ingest==0.3.12
-unstructured-ingest[remote]
+numpy==1.26.1
+pandas==2.0.3
+unstructured-ingest[remote]==0.3.12
 unstructured[all-docs]==0.13.7
 python-dotenv==1.0.1
-langchain-core==0.3.31
-langchain-openai==0.3.0
+spacy==3.6.1
 streamlit==1.41.1
 torch==2.5.1
 # langchain==0.3.15
