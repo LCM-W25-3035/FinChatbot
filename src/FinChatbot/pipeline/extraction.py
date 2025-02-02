@@ -4,8 +4,8 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
-unstructured_api_url = os.getenv("UNSTRUCTURED_API_URL")
-unstructured_api_key = os.getenv("UNSTRUCTURED_API_KEY")
+UNSTRUCTURED_API_URL = os.getenv("UNSTRUCTURED_API_URL")
+UNSTRUCTURED_API_KEY = os.getenv("UNSTRUCTURED_API_KEY")
 
 def get_data(file_bytes):
     """
@@ -19,11 +19,11 @@ def get_data(file_bytes):
             - tables (list): HTML representations of tables found in the PDF
             - texts (list): Extracted text content from narrative and uncategorized sections
     """
-    url = unstructured_api_url
+    url = UNSTRUCTURED_API_URL
 
     headers = {
         "Accept": "application/json",
-        "unstructured-api-key": unstructured_api_key
+        "unstructured-api-key": UNSTRUCTURED_API_KEY
     }
 
     files = {
