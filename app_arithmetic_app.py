@@ -1,5 +1,4 @@
 import streamlit as st
-import requests
 import os
 from dotenv import load_dotenv, find_dotenv
 from FinChatbot.pipeline.extraction import get_data
@@ -33,15 +32,6 @@ def answer_query_from_pdf(query, tables, texts):
 # Streamlit app
 def main():
     st.title("Financial Chatbot")
-
-    # Logout Button
-    try:
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.switch_page("pages/user_login.py")
-            st.stop()
-    except Exception as e:
-        return(e)
 
     # Initialize session state for questions and answers
     if "qa_history" not in st.session_state:

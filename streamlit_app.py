@@ -4,6 +4,7 @@ import pandas as pd
 import spacy
 from dotenv import load_dotenv, find_dotenv
 import streamlit as st
+from requests.exceptions import HTTPError
 
 # Load environment variables
 load_dotenv(find_dotenv())
@@ -29,7 +30,7 @@ def get_data(file_bytes):
     response = requests.post(unstructured_api_url, headers=headers, files=files)
 
     if response.status_code != 200:
-        raise Exception(f"Failed to process file: {response.text}")
+        raise HTTPError(f"Failed to process file: {response.text}")
 
     tables = []
     texts = []
@@ -123,7 +124,7 @@ if uploaded_file:
         with st.spinner("Processing your query..."):
             try:
                 # Perform the financial metric calculation
-                result = calculate_financial_metric(tables, query)
+                result = calculate_financial_metric(query)
                 st.subheader("Result:")
                 st.write(result)
             except Exception as e:

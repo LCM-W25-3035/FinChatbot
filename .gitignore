@@ -56,6 +56,7 @@ sonarqube/
 .scannerwork/
 .sonar/
 logs/
+report-task.txt
 
 # Translations
 *.mo
