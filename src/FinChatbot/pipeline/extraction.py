@@ -2,44 +2,50 @@ import requests
 import os
 from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv())
+env_path = 'C:/Users/Sarojkumar Lal/FinChatbot/.env'
+load_dotenv(dotenv_path=env_path)
 
-unstructured_api_url = os.getenv("UNSTRUCTURED_API_URL")
-unstructured_api_key = os.getenv("UNSTRUCTURED_API_KEY")
+UNSTRUCTURED_API_URL = os.getenv("UNSTRUCTURED_API_URL")
+UNSTRUCTURED_API_KEY = os.getenv("UNSTRUCTURED_API_KEY")
 
 def get_data(file_bytes):
     """
     Process a PDF file using the Unstructured API to extract tables and text content.
-
-    Args:
-        file_bytes: Bytes object containing the PDF file content
-        
-    Returns:
-        lists: A pair of 2 lists containing:
-            - tables (list): HTML representations of tables found in the PDF
-            - texts (list): Extracted text content from narrative and uncategorized sections
     """
-    url = unstructured_api_url
-
     headers = {
         "Accept": "application/json",
-        "unstructured-api-key": unstructured_api_key
+        "unstructured-api-key": UNSTRUCTURED_API_KEY
     }
 
     files = {
         "files": ("document", file_bytes, "application/pdf")
     }
 
-    response = requests.post(url, headers = headers, files = files)
+    try:
+        response = requests.post(UNSTRUCTURED_API_URL, headers=headers, files=files)
+        response.raise_for_status()  # Raise an error for non-200 status codes
 
-    tables = []
-    texts = []
+        try:
+            response_data = response.json()
+        except ValueError:
+            print("Error: Response is not valid JSON")
+            print("Raw response:", response.text)
+            return [], []
 
-    for element in response.json():
-        if (element.get("type") == "Table"):
-            tables.append(element["metadata"]["text_as_html"])
+        tables = []
+        texts = []
 
-        elif (element.get("type") in ["NarrativeText", "UncategorizedText"]):
-            texts.append(element["text"])
+        for element in response_data:
+            if isinstance(element, dict):  # Ensure the element is a dictionary
+                if element.get("type") == "Table":
+                    tables.append(element["metadata"]["text_as_html"])
+                elif element.get("type") in ["NarrativeText", "UncategorizedText"]:
+                    texts.append(element["text"])
+            else:
+                print("Unexpected element format:", element)
 
-    return tables, texts
+        return tables, texts
+
+    except requests.exceptions.RequestException as e:
+        print("API Request failed:", str(e))
+        return [], []
