@@ -2,5 +2,5 @@ projectKey=FinChatBot
 serverUrl=http://localhost:9000
 serverVersion=25.1.0.102122
 dashboardUrl=http://localhost:9000/dashboard?id=FinChatBot
-ceTaskId=0ee7cd00-7dad-4ff2-9307-81104af756d4
-ceTaskUrl=http://localhost:9000/api/ce/task?id=0ee7cd00-7dad-4ff2-9307-81104af756d4
+ceTaskId=2b145b49-02ed-456e-a1f7-978436892cee
+ceTaskUrl=http://localhost:9000/api/ce/task?id=2b145b49-02ed-456e-a1f7-978436892cee

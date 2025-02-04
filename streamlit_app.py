@@ -57,7 +57,7 @@ def parse_query_with_spacy(query):
 
 
 # Function to calculate the financial metric based on the query
-def calculate_financial_metric(tables, query):
+def calculate_financial_metric(query):
     parsed_query = parse_query_with_spacy(query)
     operation = parsed_query["operation"]
     years = parsed_query["years"]

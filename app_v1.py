@@ -19,7 +19,7 @@ from dotenv import load_dotenv, find_dotenv
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-load_dotenv(find_dotenv())
+load_dotenv()
 
 # Function to extract data from PDF
 # Function to extract and process data from the uploaded PDF

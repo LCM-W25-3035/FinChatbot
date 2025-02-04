@@ -51,6 +51,12 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Ignore SonarQube binaries and configuration
+sonarqube/
+.scannerwork/
+.sonar/
+logs/
+
 # Translations
 *.mo
 *.pot
