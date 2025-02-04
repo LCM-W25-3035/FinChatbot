@@ -12,9 +12,6 @@ def get_data(file_bytes):
     """
     Process a PDF file using the Unstructured API to extract tables and text content.
     """
-    # url = os.getenv("UNSTRUCTURED_API_URL")
-    # key = os.getenv("UNSTRUCTURED_API_KEY")
-
     headers = {
         "Accept": "application/json",
         "unstructured-api-key": UNSTRUCTURED_API_KEY

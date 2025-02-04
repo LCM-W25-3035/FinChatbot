@@ -58,13 +58,6 @@ def create_chain(pdf_file):
 
     # Initialize conversation memory
     memory = ConversationBufferMemory(return_messages = True)
-    
-    # Create conversation chain
-    conversation = ConversationChain(
-        llm = model,
-        memory = memory,
-        verbose = True
-    )
 
     # Enhanced RAG pipeline with conversation history
     def combine_chains(user_input):
@@ -106,12 +99,11 @@ def main():
             type = ["pdf"]
         )
         
-        if pdf_file:
-            if st.button("Process Document"):
-                with st.spinner("Processing Document..."):
-                    chain = create_chain(pdf_file)
-                    st.session_state["chain"] = chain
-                    st.success("Document processed successfully!")
+        if pdf_file and st.button("Process Document"):
+            with st.spinner("Processing Document..."):
+                chain = create_chain(pdf_file)
+                st.session_state["chain"] = chain
+                st.success("Document processed successfully!")
     
     # Display chat history
     for message in st.session_state.messages:
