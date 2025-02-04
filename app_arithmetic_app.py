@@ -33,10 +33,6 @@ def answer_query_from_pdf(query, tables, texts):
 def main():
     st.title("Financial Chatbot")
 
-    # Initialize session state for questions and answers
-    if "qa_history" not in st.session_state:
-        st.session_state["qa_history"] = []
-
     # Sidebar for file upload
     with st.sidebar:
         pdf_file = st.file_uploader(
