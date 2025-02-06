@@ -9,39 +9,58 @@ import streamlit as st
 from dotenv import load_dotenv, find_dotenv
 import re
 import pdfplumber
+import numpy as np
 
 nltk.download('punkt')
 
 # Load environment variables
 load_dotenv(find_dotenv())
 
-# Function to extract numbers from a text
+# Function to extract numbers from text
 def extract_numbers(text):
     return [float(num.replace(',', '')) for num in re.findall(r'\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\b', text)]
 
-# Function to calculate the average of two numbers
+# Mathematical Operations
+
 def calculate_average(numbers):
-    if len(numbers) == 2:
-        return (numbers[0] + numbers[1]) / 2
-    else:
-        return None
+    return np.mean(numbers) if numbers else None
 
-# Function to calculate the percentage change between two numbers
+def calculate_sum(numbers):
+    return np.sum(numbers) if numbers else None
+
+def calculate_product(numbers):
+    return np.prod(numbers) if numbers else None
+
+def calculate_difference(numbers):
+    return numbers[0] - numbers[1] if len(numbers) == 2 else None
+
+def calculate_division(numbers):
+    return numbers[0] / numbers[1] if len(numbers) == 2 and numbers[1] != 0 else None
+
+def calculate_median(numbers):
+    return np.median(numbers) if numbers else None
+
+def calculate_standard_deviation(numbers):
+    return np.std(numbers) if len(numbers) > 1 else None
+
+def calculate_variance(numbers):
+    return np.var(numbers) if len(numbers) > 1 else None
+
 def calculate_percentage_change(numbers):
-    if len(numbers) == 2:
-        old_value, new_value = numbers
-        return ((new_value - old_value) / old_value) * 100
-    else:
-        return None
+    return ((numbers[1] - numbers[0]) / numbers[0]) * 100 if len(numbers) == 2 else None
 
-# Function to retrieve financial context using TF-IDF
-def retrieve_context_tfidf(question, vectorizer, tfidf_matrix, paragraphs, top_k=3):
-    question_vector = vectorizer.transform([question])
-    similarity_scores = cosine_similarity(question_vector, tfidf_matrix).flatten()
-    top_indices = similarity_scores.argsort()[-top_k:][::-1]
-    return [paragraphs[i] for i in top_indices]
+def calculate_compound_interest(principal, rate, time):
+    return principal * (1 + rate/100) ** time if principal and rate and time else None
 
-# Function to retrieve financial context using BM25
+# Extract text from PDF
+def extract_text_from_pdf(uploaded_file):
+    paragraphs = []
+    with pdfplumber.open(uploaded_file) as pdf:
+        for page in pdf.pages:
+            paragraphs.extend(page.extract_text().split("\n"))
+    return paragraphs
+
+# Retrieve financial context
 def retrieve_context_bm25(question, paragraphs, top_k=3):
     tokenized_paragraphs = [word_tokenize(p.lower()) for p in paragraphs]
     bm25 = BM25Okapi(tokenized_paragraphs)
@@ -50,59 +69,50 @@ def retrieve_context_bm25(question, paragraphs, top_k=3):
     top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
     return [paragraphs[i] for i in top_indices]
 
-# Extract text from uploaded PDF
-def extract_text_from_pdf(uploaded_file):
-    paragraphs = []
-    with pdfplumber.open(uploaded_file) as pdf:
-        for page in pdf.pages:
-            paragraphs.extend(page.extract_text().split("\n"))
-    return paragraphs
-
 # Streamlit app
 st.title("Financial & Math Chatbot")
 
-# Sidebar for PDF upload
 uploaded_file = st.sidebar.file_uploader("Upload a Financial Statement (PDF)", type=["pdf"])
 
 if uploaded_file:
     with st.spinner("Processing PDF..."):
         paragraphs = extract_text_from_pdf(uploaded_file)
-
-        # Preprocessing: tokenize and extract numbers
-        all_numbers = []
-        for paragraph in paragraphs:
-            numbers = extract_numbers(paragraph)
-            all_numbers.extend(numbers)
-
-        # Initialize TF-IDF model
         vectorizer = TfidfVectorizer()
         tfidf_matrix = vectorizer.fit_transform(paragraphs)
-
     st.sidebar.success("PDF processed successfully!")
 
-    # Input box for user questions
     question = st.text_input("Ask a question about the financial statement or a math question:")
 
     if question:
         with st.spinner("Processing your question..."):
+            numbers = extract_numbers(question)
+            result = None
+            
             if "average" in question.lower():
-                numbers = extract_numbers(question)
                 result = calculate_average(numbers)
-                if result is not None:
-                    st.subheader(f"Answer: The average is {result}")
-                else:
-                    st.error("Could not extract two numbers to calculate the average.")
-
+            elif "sum" in question.lower():
+                result = calculate_sum(numbers)
+            elif "product" in question.lower():
+                result = calculate_product(numbers)
+            elif "difference" in question.lower():
+                result = calculate_difference(numbers)
+            elif "divide" in question.lower() or "division" in question.lower():
+                result = calculate_division(numbers)
+            elif "median" in question.lower():
+                result = calculate_median(numbers)
+            elif "standard deviation" in question.lower():
+                result = calculate_standard_deviation(numbers)
+            elif "variance" in question.lower():
+                result = calculate_variance(numbers)
             elif "percentage change" in question.lower():
-                numbers = extract_numbers(question)
                 result = calculate_percentage_change(numbers)
-                if result is not None:
-                    st.subheader(f"Answer: The percentage change is {result:.2f}%")
-                else:
-                    st.error("Could not extract two numbers to calculate the percentage change.")
-
+            elif "compound interest" in question.lower():
+                if len(numbers) >= 3:
+                    result = calculate_compound_interest(numbers[0], numbers[1], numbers[2])
+            
+            if result is not None:
+                st.subheader(f"Answer: {result}")
             else:
-                # Handle financial statement queries using BM25
                 results = retrieve_context_bm25(question, paragraphs)
                 st.subheader("Answers from Financial Statement:")
                 for i, answer in enumerate(results, start=1):
