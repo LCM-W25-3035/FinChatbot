@@ -10,7 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain.schema.runnable import RunnablePassthrough
 
-load_dotenv(find_dotenv())
+load_dotenv()
 
 def create_chain(pdf_file):
     """Processes the uploaded PDF and returns the RAG pipeline chain."""
