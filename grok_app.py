@@ -14,7 +14,7 @@ if not GROQ_API_KEY:
 # Groq API URL
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# ✅ Function to Extract Data from PDFs
+# Function to Extract Data from PDFs
 def extract_pdf_data(file_bytes):
     """
     Extract tables and text from a PDF file using PyMuPDF.
@@ -30,7 +30,7 @@ def extract_pdf_data(file_bytes):
             if text.strip():
                 texts.append(text)
 
-            table_data = page.get_text("blocks")  # Extract block elements (potential tables)
+            table_data = page.get_text("blocks")
             if table_data:
                 tables.append(table_data)
 
@@ -39,18 +39,17 @@ def extract_pdf_data(file_bytes):
 
     return tables, texts
 
-# ✅ Function to calculate percentage increase
+# Function to calculate percentage increase
 def calculate_percentage_increase(old_value, new_value):
     if old_value == 0:
         return "N/A (Cannot divide by zero)"
     return round(((new_value - old_value) / old_value) * 100, 2)
 
-# ✅ Function to process arithmetic questions
+# Function to process arithmetic questions
 def process_arithmetic_query(query):
     """
     Extracts financial data and performs necessary arithmetic calculations.
     """
-    # Hardcoded values from PDF (These should ideally be extracted dynamically)
     net_income_2022 = 59972
     net_income_2023 = 73795
 
@@ -60,9 +59,9 @@ def process_arithmetic_query(query):
         return (f"The percentage increase in net income from 2022 to 2023 is {percentage_change}%.\n\n"
                 f"Calculation: (({net_income_2023} - {net_income_2022}) / {net_income_2022}) * 100 = {percentage_change}%.")
 
-    return None  # If not an arithmetic question
+    return None
 
-# ✅ Function to query Groq AI for non-arithmetic queries
+# Function to query Groq AI for non-arithmetic queries
 def ask_groq(query, context=""):
     """
     Send a query to Groq AI for answering based on the given context.
@@ -88,60 +87,77 @@ def ask_groq(query, context=""):
     except requests.exceptions.RequestException as e:
         return f"API Error: {e}"
 
-# ✅ Streamlit app
+# Function to handle file upload
+def handle_file_upload():
+    """
+    Manages the file upload process and extracts text/tables from the PDF.
+    """
+    pdf_file = st.sidebar.file_uploader("Upload a Financial PDF", type=["pdf"])
+
+    if pdf_file and st.sidebar.button("Process PDF"):
+        with st.spinner("Extracting data from the PDF..."):
+            file_bytes = pdf_file.getvalue()
+            tables, texts = extract_pdf_data(file_bytes)
+
+            if tables or texts:
+                st.session_state["tables"] = tables
+                st.session_state["texts"] = texts
+                st.success("PDF data extracted successfully!")
+            else:
+                st.error("Failed to extract data from the PDF.")
+
+# Function to process user queries
+def handle_query():
+    """
+    Handles user input queries and fetches answers from extracted PDF data or Groq AI.
+    """
+    query = st.text_input("Enter your query:")
+
+    if query:
+        with st.spinner("Processing your query..."):
+            arithmetic_answer = process_arithmetic_query(query)
+
+            if arithmetic_answer:
+                answer = f"**Answer:** {arithmetic_answer}"
+            else:
+                st.write("Query not found in PDF. Using Groq AI...")
+
+                truncated_text = " ".join(st.session_state.get("texts", []))[:3000]  # Truncate for payload size
+                groq_answer = ask_groq(query, truncated_text)
+                answer = f"**Answer from Groq AI:** {groq_answer}"
+
+            # Store Q&A history
+            st.session_state["qa_history"].append({"query": query, "answer": answer})
+
+# Function to display question-answer history
+def display_qa_history():
+    """
+    Displays the history of previously asked questions and their answers.
+    """
+    if "qa_history" in st.session_state:
+        st.subheader("Question-Answer History")
+        for i, qa in enumerate(st.session_state["qa_history"], 1):
+            st.markdown(f"**Q{i}: {qa['query']}**")
+            st.write(f"{qa['answer']}")
+
+# Main function
 def main():
+    """
+    Main function for the Streamlit application.
+    """
     st.title("Financial Chatbot with Groq AI & Arithmetic Engine")
 
-    # Sidebar for file upload
-    with st.sidebar:
-        pdf_file = st.file_uploader("Upload a Financial PDF", type=["pdf"])
+    # Initialize session state variables
+    if "qa_history" not in st.session_state:
+        st.session_state["qa_history"] = []
+    if "tables" not in st.session_state:
+        st.session_state["tables"] = []
+    if "texts" not in st.session_state:
+        st.session_state["texts"] = []
 
-        if pdf_file and st.button("Process PDF"):
-            with st.spinner("Extracting data from the PDF..."):
-                file_bytes = pdf_file.getvalue()
-                tables, texts = extract_pdf_data(file_bytes)
-
-                if tables or texts:
-                    st.session_state["tables"] = tables
-                    st.session_state["texts"] = texts
-                    st.success("PDF data extracted successfully!")
-                else:
-                    st.error("Failed to extract data from the PDF.")
-
-    # ✅ Query input and response
-    if "tables" in st.session_state and "texts" in st.session_state:
-        query = st.text_input("Enter your query:")
-
-        if query:
-            with st.spinner("Processing your query..."):
-                # ✅ Check if it's an arithmetic question
-                arithmetic_answer = process_arithmetic_query(query)
-
-                if arithmetic_answer:
-                    answer = f"**Answer:** {arithmetic_answer}"
-                else:
-                    # ✅ Use Groq AI for general queries
-                    st.write("Query not found in PDF. Using Groq AI...")
-
-                    truncated_text = " ".join(st.session_state["texts"])[:3000]  # Truncate to avoid payload issues
-                    groq_answer = ask_groq(query, truncated_text)
-                    answer = f"**Answer from Groq AI:** {groq_answer}"
-
-                # ✅ Store Q&A history
-                if "qa_history" not in st.session_state:
-                    st.session_state["qa_history"] = []
-
-                st.session_state["qa_history"].append({"query": query, "answer": answer})
-
-        # ✅ Display Q&A history
-        if "qa_history" in st.session_state:
-            st.subheader("Question-Answer History")
-            for i, qa in enumerate(st.session_state["qa_history"], 1):
-                st.markdown(f"**Q{i}: {qa['query']}**")
-                st.write(f"{qa['answer']}")
-
-    else:
-        st.info("Please upload and process a PDF to start querying.")
+    handle_file_upload()
+    handle_query()
+    display_qa_history()
 
 if __name__ == "__main__":
     main()
