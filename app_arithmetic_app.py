@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 from FinChatbot.pipeline.extraction import get_data
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
@@ -38,23 +38,15 @@ def answer_query_from_pdf(query, tables, texts):
 
     return None
 
-# Streamlit app
-def main():
-    st.title("Financial Chatbot")
-    
-    # Logout Button
-    try:
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.switch_page("pages/user_login.py")
-            st.stop()
-    except Exception as e:
-        return(e)
+# Define Logout Logic
+def handle_logout():
+    if st.button("Logout"):
+        st.session_state.clear()
+        st.switch_page("pages/user_login.py")
+        st.stop()
 
-    if "qa_history" not in st.session_state:
-        st.session_state["qa_history"] = []
-
-    # Sidebar for file upload 
+# Define Sidebar Logic
+def handle_sidebar():
     with st.sidebar:
         pdf_file = st.file_uploader("Upload a PDF file", type=["pdf"])
         if pdf_file and st.button("Process PDF"):
@@ -68,6 +60,8 @@ def main():
                 else:
                     st.error("Failed to extract data from the PDF.")
 
+# Define Query Processing
+def handle_query_processing():
     if "tables" in st.session_state and "texts" in st.session_state:
         query = st.text_input("Enter your query:")
         if query:
@@ -99,9 +93,19 @@ def main():
             for i, qa in enumerate(st.session_state["qa_history"], 1):
                 st.markdown(f"**Q{i}: {qa['query']}**")
                 st.write(f"{qa['answer']}")
-
     else:
         st.info("Please upload and process a PDF to start querying.")
+
+# Streamlit app
+def main():
+    st.title("Financial Chatbot")
+    handle_logout()
+
+    if "qa_history" not in st.session_state:
+        st.session_state["qa_history"] = []
+
+    handle_sidebar()
+    handle_query_processing()
 
 if __name__ == "__main__":
     main()

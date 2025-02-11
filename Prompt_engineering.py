@@ -1,14 +1,19 @@
 import os
 import fitz  # PyMuPDF for PDF text extraction
 from dotenv import load_dotenv
-import openai
 import streamlit as st
+from transformers import pipeline
+from huggingface_hub import login
 
 # Load environment variables
 load_dotenv()  # Automatically loads the .env file in the current directory
 
-# OpenAI API Key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Authenticate with Hugging Face API using the TOKEN_KEY in .env
+huggingface_token = os.getenv("TOKEN_KEY")
+login(token=huggingface_token)  # Use the Hugging Face API token
+
+# Set up Hugging Face Question Answering pipeline
+qa_pipeline = pipeline("question-answering", model="distilbert-base-uncased-distilled-squad")
 
 # Function to process a PDF file using PyMuPDF (fitz)
 def get_data(file_bytes):
@@ -22,29 +27,18 @@ def get_data(file_bytes):
     
     return text
 
-# Function to query OpenAI with the extracted text for calculations or questions
-def ask_gpt(query, extracted_text):
-    prompt = f"""
-    You are a financial assistant. Below is the financial data extracted from a PDF. 
-
-    Please answer the following question based on the information provided:
-
-    {extracted_text[:3000]}  # Limiting to first 3000 characters
-
-    Question: {query}
-    """
-
-    # Use the new OpenAI chat-based model for answering based on the PDF content
-    response = openai.chat.Completion.create(
-        model="gpt-3.5-turbo",  # Using the latest GPT-3.5-turbo model
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=500,
-        temperature=0.5  # Slightly creative, can adjust based on your need
-    )
-    return response['choices'][0]['message']['content'].strip()
+# Function to use Hugging Face to answer the query based on extracted text
+def ask_huggingface(query, extracted_text):
+    # Run the question-answering model
+    result = qa_pipeline({
+        'context': extracted_text,
+        'question': query
+    })
+    
+    return result['answer']
 
 # Streamlit App
-st.title("Financial Chatbot with PDF Processing")
+st.title("Financial Chatbot")
 
 # Sidebar for PDF Upload
 uploaded_file = st.sidebar.file_uploader("Upload a Financial Statement (PDF)", type=["pdf"])
@@ -69,8 +63,8 @@ if uploaded_file:
     if query:
         with st.spinner("Processing your query..."):
             try:
-                # Use OpenAI to process the query based on the extracted text
-                result = ask_gpt(query, extracted_text)  # Use the extracted text for querying
+                # Use Hugging Face to process the query based on the extracted text
+                result = ask_huggingface(query, extracted_text)  # Use the extracted text for querying
                 st.subheader("Result:")
                 st.write(result)
             except Exception as e:
