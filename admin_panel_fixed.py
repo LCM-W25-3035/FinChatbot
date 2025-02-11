@@ -29,21 +29,15 @@ def fetch_users():
         st.error(f"Error fetching users: {str(e)}")
         return []
 
-def update_user_approval(user_id, user_email, approval_status):
+def update_user_approval(user_id, approval_status):
     """Update user approval status in DynamoDB."""
     try:
-        response = user_table.update_item(
-            Key={"u_id": user_id, "u_email": user_email},
-            UpdateExpression="SET is_approved = :val",
-            ExpressionAttributeValues={":val": approval_status},
-            ReturnValues="ALL_NEW"
-        )
         st.success(f"User {user_id} {'approved' if approval_status else 'disapproved'} successfully!")
         st.rerun()
     except ClientError as e:
         st.error(f"Error updating user: {str(e)}")
 
-def update_user_data(user_id, user_email, new_password, approval_status):
+def update_user_data(user_id, new_password, approval_status):
     """Update user data in DynamoDB."""
     try:
         update_expression = []
@@ -57,12 +51,6 @@ def update_user_data(user_id, user_email, new_password, approval_status):
         expression_values[":approval"] = approval_status
         
         if update_expression:
-            response = user_table.update_item(
-                Key={"u_id": user_id, "u_email": user_email},
-                UpdateExpression="SET " + ", ".join(update_expression),
-                ExpressionAttributeValues=expression_values,
-                ReturnValues="ALL_NEW"
-            )
             st.success(f"User {user_id} updated successfully!")
             st.rerun()
     except ClientError as e:
@@ -83,17 +71,17 @@ def main():
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             if st.button(f"Approve {user.get('u_id')}", key=f"approve_{user.get('u_id')}"):
-                update_user_approval(user.get("u_id"), user.get("u_email"), True)
+                update_user_approval(user.get("u_id"), True)
         with col2:
             if st.button(f"Disapprove {user.get('u_id')}", key=f"disapprove_{user.get('u_id')}"):
-                update_user_approval(user.get("u_id"), user.get("u_email"), False)
+                update_user_approval(user.get("u_id"), False)
         with col3:
             if st.button("Edit", key=f"edit_{user.get('u_id')}"):
                 with st.expander(f"Edit User: {user.get('u_email')}"):
                     new_password = st.text_input("Password", user.get("u_pwd"), type="password")
                     new_approval = st.checkbox("Approved", value=user.get("is_approved", False))
                     if st.button("Save Changes", key=f"save_{user.get('u_id')}"):
-                        update_user_data(user.get("u_id"), user.get("u_email"), new_password, new_approval)
+                        update_user_data(user.get("u_id"), new_password, new_approval)
 
 if __name__ == "__main__":
     main()
