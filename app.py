@@ -1,13 +1,7 @@
 import streamlit as st
 from FinChatbot.pipeline.llm_chain import (ArithmeticLLM,
                                            SpanLLM)
-
-
-# Just for example
-def classify_query(query):
-    """Classify query type based on keywords."""
-    arithmetic_keywords = ['calculate', 'sum', 'average', 'difference', 'compute', 'total']
-    return 'arithmetic' if any(keyword in query.lower() for keyword in arithmetic_keywords) else 'span'
+from FinChatbot.pipeline.classification import model_predict
 
 def main():
     st.title("Fin-Tech ChatBot")
@@ -45,7 +39,7 @@ def main():
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     # Classify the user's query
-                    query_type = classify_query(prompt)
+                    query_type = model_predict(prompt)
 
                     # Handle based on the classification
                     if query_type == "span":
@@ -54,7 +48,8 @@ def main():
                     elif query_type == "arithmetic":
                         # Use MVR from SpanLLM to get context
                         context = st.session_state["span_chain"].retriever.invoke(prompt)
-                        response = st.session_state["arithmetic_chain"].get_response(prompt, context)
+                        whole_response = st.session_state["arithmetic_chain"].get_response(prompt, context)
+                        response = whole_response["Answer"]
                     
                     st.markdown(response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
