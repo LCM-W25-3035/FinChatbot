@@ -1,11 +1,13 @@
 import streamlit as st
 import boto3
-from botocore.exceptions import ClientError
 import os
+from botocore.exceptions import ClientError
 
-# Initialize DynamoDB client
-dynamodb = boto3.resource('dynamodb', region_name='us-east-2')  # Update with your AWS region
-USER_TABLE = os.getenv("USER_TABLE")  # Ensure your user table environment variable is set
+# Initialize AWS resources
+dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+
+USER_TABLE = os.getenv("USER_TABLE")
+
 user_table = dynamodb.Table(USER_TABLE)
 
 # Fetch all users from DynamoDB
@@ -14,157 +16,173 @@ def fetch_users():
         response = user_table.scan()
         return response.get("Items", [])
     except ClientError as e:
-        return {"error": str(e)}
+        st.error(f"Error fetching users: {e}")
+        return []
 
-# Update user approval status
-def update_user_approval(user_id, approval_status):
+# Fetch user details
+def fetch_user(user_id):
     try:
-        # Update the user's approval status in DynamoDB
-        response = user_table.update_item(
-            Key={"u_id": user_id},
-            UpdateExpression="SET is_approved = :status",
-            ExpressionAttributeValues={":status": approval_status},
-            ReturnValues="ALL_NEW"  # Ensure that we get the updated item in the response
-        )
-        
-        updated_item = response.get("Attributes", None)
-        if updated_item:
-            st.write(f"User {updated_item['u_email']} has been {'approved' if approval_status else 'not approved'} successfully.")
-        else:
-            st.warning(f"No user found with ID {user_id}. Update failed.")
-        
-        return True
+        response = user_table.get_item(Key={"u_id": user_id})
+        return response.get("Item", {})
     except ClientError as e:
-        st.error(f"Error updating approval status: {e}")
-        return False
+        st.error(f"Error fetching user: {e}")
+        return {}
+
+# Update user status (Approve/Disapprove)
+def update_user_status(user_id, status):
+    try:
+        user_table.update_item(
+            Key={"u_id": user_id},
+            UpdateExpression="SET approved = :status",
+            ExpressionAttributeValues={":status": status}
+        )
+        st.success(f"User status updated to {status}.")
+        st.rerun()
+    except ClientError as e:
+        st.error(f"Error updating status: {e}")
 
 # Edit user information
 def edit_user_info(user_id, new_email, new_name, new_address):
     try:
-        response = user_table.update_item(
+        user_table.update_item(
             Key={"u_id": user_id},
             UpdateExpression="SET u_email = :email, u_name = :name, u_address = :address",
             ExpressionAttributeValues={
                 ":email": new_email,
                 ":name": new_name,
                 ":address": new_address
-            },
-            ReturnValues="ALL_NEW"
+            }
         )
-        
-        updated_item = response.get("Attributes", None)
-        if updated_item:
-            st.success(f"User {updated_item['u_email']} information has been updated.")
-            return True
-        else:
-            st.warning(f"No user found with ID {user_id}. Edit failed.")
-            return False
+        st.success("User information updated successfully.")
     except ClientError as e:
-        st.error(f"Error updating user information: {e}")
-        return False
+        st.error(f"Error updating user: {e}")
 
-# Delete user
-def delete_user(user_id):
+# Edit PDF metadata
+def edit_pdf_info(user_id, pdf_id, new_title, new_description):
     try:
-        # Delete the user from DynamoDB
-        response = user_table.delete_item(
-            Key={"u_id": user_id}
-        )
-        
-        # Check if the deletion was successful
-        if response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200:
-            st.success(f"User with ID {user_id} has been deleted successfully.")
-            return True
-        else:
-            st.warning(f"Failed to delete user with ID {user_id}.")
-            return False
+        user = fetch_user(user_id)
+        if "pdfs" in user:
+            for pdf in user["pdfs"]:
+                if pdf["pdf_id"] == pdf_id:
+                    pdf["pdf_title"] = new_title
+                    pdf["pdf_description"] = new_description
+                    break
+            user_table.update_item(
+                Key={"u_id": user_id},
+                UpdateExpression="SET pdfs = :pdfs",
+                ExpressionAttributeValues={":pdfs": user["pdfs"]}
+            )
+            st.success(f"PDF {pdf_id} updated successfully.")
     except ClientError as e:
-        st.error(f"Error deleting user: {e}")
-        return False
+        st.error(f"Error updating PDF: {e}")
 
-# Admin Dashboard UI
+# Delete PDF from DynamoDB
+def delete_pdf(user_id, pdf_id):
+    try:
+        user = fetch_user(user_id)
+        if "pdfs" in user:
+            updated_pdfs = [pdf for pdf in user["pdfs"] if pdf["pdf_id"] != pdf_id]
+            user_table.update_item(
+                Key={"u_id": user_id},
+                UpdateExpression="SET pdfs = :pdfs",
+                ExpressionAttributeValues={":pdfs": updated_pdfs}
+            )
+            st.success(f"PDF {pdf_id} deleted successfully.")
+            st.experimental_rerun()
+    except ClientError as e:
+        st.error(f"Error deleting PDF: {e}")
+
+# Delete only PDF information from DynamoDB
+def delete_user_pdfs(user_id):
+    try:
+        user = fetch_user(user_id)
+        if "pdfs" in user and user["pdfs"]:
+            user_table.update_item(
+                Key={"u_id": user_id},
+                UpdateExpression="REMOVE pdfs"
+            )
+            st.success(f"PDFs for user {user_id} deleted successfully.")
+            st.rerun()
+        else:
+            st.info("No PDFs available to delete.")
+    except ClientError as e:
+        st.error(f"Error deleting PDFs: {e}")
+
+# Main Admin Dashboard
 def main():
     st.title("Admin Dashboard")
 
-    # Check if the user is an admin
+    # Ensure admin access
     if "is_admin" not in st.session_state or not st.session_state["is_admin"]:
-        st.error("Unauthorized access! Please log in as an admin.")
-        return
+        st.error("Unauthorized access! Admins only.")
+        st.stop()
 
-    # Fetch user data from DynamoDB
     users = fetch_users()
 
-    if "error" in users:
-        st.error(f"Error fetching users: {users['error']}")
-    else:
-        # Display all users for the admin to approve or not approve
-        for user in users:
-            user_id = user.get('u_id', 'N/A')
-            user_email = user.get('u_email', 'N/A')
-            user_name = user.get('u_name', 'N/A')  # Assuming the user has a 'u_name' field
-            user_address = user.get('u_address', 'N/A')  # Assuming the user has a 'u_address' field
+    # Display each user with actions
+    for user in users:
+        user_id = user.get('u_id', 'N/A')
+        user_email = user.get('u_email', 'N/A')
+        user_name = user.get('u_name', 'N/A')
+        user_address = user.get('u_address', 'N/A')
+        approved_status = user.get('approved', 'Pending')
 
-            with st.expander(f"User: {user_email}"):
-                # Display user information
-                st.write(f"User ID: {user_id}")
-                st.write(f"User Email: {user_email}")
-                st.write(f"User Name: {user_name}")
-                st.write(f"User Address: {user_address}")
+        with st.expander(f"User: {user_email}"):
+            st.write(f"User ID: {user_id}")
+            st.write(f"Name: {user_name}")
+            st.write(f"Address: {user_address}")
+            st.write(f"Status: {approved_status}")
 
-                # Radio button for "Approved or Not Approved"
-                approval_status = st.radio(
-                    f"Approval Status for {user_email}",
-                    options=["Approved", "Not Approved"],
-                    index=0 if user.get("is_approved", False) else 1,
-                    key=f"approval_{user_id}"
-                )
-
-                # Save approval status button for approval
-                if approval_status == "Approved" and not user.get("is_approved", False):
+            # Approve or Disapprove users
+            if approved_status == 'Pending':
+                col1, col2 = st.columns(2)
+                with col1:
                     if st.button(f"Approve {user_email}", key=f"approve_{user_id}"):
-                        if update_user_approval(user_id, True):
-                            st.success(f"User {user_email} has been approved.")
-                            st.session_state['approved_user_id'] = user_id  # Store approved user id to edit or delete
-                            st.rerun()
-
-                # Save approval status button for disapproval
-                elif approval_status == "Not Approved" and user.get("is_approved", False):
+                        update_user_status(user_id, "Approved")
+                with col2:
                     if st.button(f"Disapprove {user_email}", key=f"disapprove_{user_id}"):
-                        if update_user_approval(user_id, False):
-                            st.success(f"User {user_email} has been disapproved.")
-                            st.session_state['approved_user_id'] = None  # Reset approved user id
-                            st.rerun()
+                        update_user_status(user_id, "Disapproved")
 
-                # Only show Edit and Delete options after approval or disapproval
-                if 'approved_user_id' in st.session_state and st.session_state['approved_user_id'] == user_id:
-                    st.subheader(f"Actions for {user_email}:")
-                    action = st.radio(
-                        f"Choose action for {user_email}",
-                        options=["Edit User", "Delete User"],
-                        key=f"action_{user_id}"
-                    )
-                    
-                    if action == "Edit User":
-                        # Allow admin to edit user details
-                        new_email = st.text_input(f"New Email for {user_email}", value=user_email)
-                        new_name = st.text_input(f"New Name for {user_name}", value=user_name)
-                        new_address = st.text_input(f"New Address for {user_address}", value=user_address)
-                        
-                        # Save changes button for editing user info
-                        if st.button(f"Save Changes for {user_email}", key=f"save_{user_id}"):
-                            if edit_user_info(user_id, new_email, new_name, new_address):
-                                st.rerun()
+            if approved_status == 'Approved':
+                action = st.radio("Select Action", ("Edit", "Delete"), key=f"action_{user_id}")
 
-                    elif action == "Delete User":
-                        # Confirm delete action
-                        if st.button(f"Delete User {user_email}", key=f"delete_{user_id}"):
-                            if delete_user(user_id):
-                                st.rerun()
+                if action == "Edit":
+                    edit_user_section(user_id)
 
-    # Logout button for admin
+                elif action == "Delete":
+                    delete_user_pdfs(user_id)
+
+    # Logout button
     if st.button("Logout"):
         st.session_state["is_admin"] = False
-        st.switch_page("Admin_login")  # Redirect back to login page
+        st.rerun()
+
+# Edit user and PDFs section
+def edit_user_section(user_id):
+    st.subheader("Edit User & PDF Information")
+
+    user = fetch_user(user_id)
+    if not user:
+        st.error("User not found.")
+        return
+
+    new_email = st.text_input("Email", value=user.get("u_email", ""), key=f"email_{user_id}")
+    new_name = st.text_input("Name", value=user.get("u_name", ""), key=f"name_{user_id}")
+    new_address = st.text_input("Address", value=user.get("u_address", ""), key=f"address_{user_id}")
+
+    if st.button("Update User Information", key=f"update_user_{user_id}"):
+        edit_user_info(user_id, new_email, new_name, new_address)
+
+    # Edit PDFs
+    if "pdfs" in user:
+        st.subheader("Edit PDFs")
+        for pdf in user["pdfs"]:
+            pdf_id = pdf.get("pdf_id")
+            pdf_title = st.text_input(f"Title for {pdf_id}", value=pdf.get("pdf_title", ""), key=f"title_{pdf_id}")
+            pdf_description = st.text_area(f"Description for {pdf_id}", value=pdf.get("pdf_description", ""), key=f"desc_{pdf_id}")
+
+            if st.button(f"Update PDF {pdf_id}", key=f"update_pdf_{pdf_id}"):
+                edit_pdf_info(user_id, pdf_id, pdf_title, pdf_description)
 
 if __name__ == "__main__":
     main()
