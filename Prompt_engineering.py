@@ -23,7 +23,7 @@ MODEL_NAME = "microsoft/DialoGPT-medium"
 try:
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, local_files_only=True)
     model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, local_files_only=True)
-except:
+except OSError:
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
@@ -78,7 +78,7 @@ def handle_arithmetic_query(query, extracted_text):
     return "Error: Could not understand the arithmetic query."
 
 # Function to suggest follow-up questions
-def suggest_follow_up(question, extracted_text):
+def suggest_follow_up(question):
     """Suggest a follow-up question based on the current question."""
     if "sum" in question or "total" in question:
         return "Would you like to know the average of the numbers in the document?"
@@ -152,7 +152,7 @@ if query:
             st.write(result)
 
             # Suggest a follow-up question based on the current question
-            follow_up_question = suggest_follow_up(query, st.session_state.extracted_text)
+            follow_up_question = suggest_follow_up(query)
             st.write(f"Suggested follow-up question: {follow_up_question}")
 
             # After the answer, ask for the next question
