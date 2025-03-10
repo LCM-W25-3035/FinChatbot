@@ -46,20 +46,29 @@ class SpanLLM:
 
         # Define prompt template
         self.prompt = ChatPromptTemplate.from_template(
-            """
-            Previous conversation:
-            {history}
+        """
+        Conversation History:
+        {history}
 
-            Current context from document:
-            {context}
+        Document Context:
+        {context}
 
-            Current question: {question}
+        Current Question:
+        {question}
 
-            Please provide a response that considers both the conversation history and the current context.
-            MAKE THE ANSWER IN BETWEEN THE RANGE OF 10 TO 200 WORDS DEPENDING ON QUESTIONS. DO NOT MAKE ANSWERS UNNECESSARY LONG.
-            DO NOT MAKE THINGS ON YOUR OWN.
-            """
+        Please generate a response that thoughtfully considers both the conversation history and \
+        the provided document context. Your answer should be concise and clear, \
+        containing between 10 and 200 words depending on the complexity of the question. \
+        Avoid adding any information that is not directly supported by the given context.
+
+        Policies:
+        - Strictly adhere to the provided document context (mvr); do not introduce external details.
+        - Use clear, user-friendly language throughout your response.
+        - Ensure all information is derived only from the given context and conversation history.
+        - Maintain accuracy and clarity without unnecessary elaboration.
+        """
         )
+
 
         # Initialize LLM and memory
         self.model = ChatOpenAI(
