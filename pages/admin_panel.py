@@ -123,10 +123,11 @@ def delete_pdf(user_id, user_email, pdf_name):
     except ClientError as e:
         st.error(f"Error deleting PDF: {str(e)}")
 
+# Refactored 'main()' to Reduce Cognitive Complexity per SonarQube
+
 def main():
     st.title("Admin Panel - User Management")
 
-    # Fetch Users
     users = fetch_users()
     if not users:
         st.warning("No users found.")
@@ -134,49 +135,50 @@ def main():
 
     st.subheader("Manage Users")
     for user in users:
-        col1, col2, col3 = st.columns([1, 1, 3])
-        with col1:
-            if st.button(f"Approve {user['u_id']}", key=f"approve_{user['u_id']}"):
-                update_user_data(user["u_id"], user["u_email"], None, True, user.get("pdf_limit", 5))
-        with col2:
-            if st.button(f"Disapprove {user['u_id']}", key=f"disapprove_{user['u_id']}"):
-                update_user_data(user["u_id"], user["u_email"], None, False, user.get("pdf_limit", 5))
-        with col3:
-            with st.expander(f"Edit {user['u_email']}"):
-                new_password = st.text_input("New Password", type="password", key=f"new_password_{user['u_id']}")
-                new_approval = st.checkbox("Approved", value=user.get("is_approved", False), key=f"approval_{user['u_id']}")
-                
-                # Convert pdf_limit to integer (if it's Decimal)
-                pdf_limit = int(user.get("pdf_limit", 5))  # Ensure it's an integer
-                new_pdf_limit = st.number_input("Set PDF Upload Limit", min_value=1, max_value=20, value=pdf_limit, key=f"pdf_limit_{user['u_id']}")
-                
-                if st.button("Save Changes", key=f"save_{user['u_id']}"):
-                    update_user_data(user["u_id"], user["u_email"], new_password, new_approval, new_pdf_limit)
+        render_user_controls(user)
 
     st.subheader("Manage PDFs")
-    selected_user = st.selectbox("Select user for PDF upload", options=[(u["u_id"], u["u_email"]) for u in users])
+    handle_pdf_management(users)
+
+def render_user_controls(user):
+    """Display controls for managing individual users."""
+    col1, col2, col3 = st.columns([1, 1, 3])
+    with col1:
+        if st.button(f"Approve {user['u_id']}", key=f"approve_{user['u_id']}"):
+            update_user_data(user['u_id'], user['u_email'], None, True, user.get('pdf_limit', 5))
+    with col2:
+        if st.button(f"Disapprove {user['u_id']}", key=f"disapprove_{user['u_id']}"):
+            update_user_data(user['u_id'], user['u_email'], None, False, user.get('pdf_limit', 5))
+    with col3:
+        render_user_edit_section(user)
+
+def render_user_edit_section(user):
+    """Provide editable fields for user properties."""
+    with st.expander(f"Edit {user['u_email']}"):
+        new_password = st.text_input("New Password", type="password", key=f"pwd_{user['u_id']}")
+        new_approval = st.checkbox("Approved", value=user.get('is_approved', False), key=f"approval_{user['u_id']}")
+        new_pdf_limit = st.number_input("PDF Limit", 1, 20, int(user.get('pdf_limit', 5)), key=f"limit_{user['u_id']}")
+
+        if st.button("Save", key=f"save_{user['u_id']}"):
+            update_user_data(user['u_id'], user['u_email'], new_password, new_approval, new_pdf_limit)
+
+def handle_pdf_management(users):
+    """Display controls for managing user PDFs."""
+    selected_user = st.selectbox("Select user", [(u['u_id'], u['u_email']) for u in users])
     if selected_user:
         user_id, user_email = selected_user
-
-        response = user_table.get_item(Key={"u_id": user_id, "u_email": user_email})
-        user_data = response.get("Item", {})
-        pdf_files = user_data.get("pdf_files", []) if "pdf_files" in user_data else []
+        user_data = user_table.get_item(Key={"u_id": user_id, "u_email": user_email}).get("Item", {})
+        pdf_files = user_data.get("pdf_files", [])
         pdf_limit = user_data.get("pdf_limit", 5)
 
-        uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
-        if uploaded_file and st.button("Upload PDF"):
+        uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
+        if uploaded_file and st.button("Upload"):
             upload_pdf(uploaded_file, user_id, user_email, pdf_limit)
 
-        if pdf_files:
-            st.write(f"**Existing PDFs for {user_email} (Limit: {pdf_limit} PDFs):**")
-            for pdf in pdf_files:
-                pdf_name = pdf.split("/")[-1]
-                col1, col2 = st.columns([3, 1])
-                col1.write(pdf_name)
-                if col2.button("Delete", key=f"delete_{pdf_name}"):
-                    delete_pdf(user_id, user_email, pdf_name)
-        else:
-            st.warning("No PDFs found.")
+        st.write(f"Existing PDFs ({len(pdf_files)}/{pdf_limit}):")
+        for pdf in pdf_files:
+            if st.button("Delete", key=f"del_{pdf}"):
+                delete_pdf(user_id, user_email, pdf.split("/")[-1])
 
 if __name__ == "__main__":
     main()

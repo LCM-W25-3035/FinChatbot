@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from huggingface_hub import login
+import regex  # Use the regex module (compatible with re but with more features)
 
 # Load environment variables
 load_dotenv()
@@ -41,10 +42,13 @@ def get_data(file_bytes):
     return text
 
 # Function to extract numbers from extracted text
+import re
+
 def extract_numbers(text):
-    """Extract all numbers (including decimals) from text."""
-    numbers = re.findall(r'\d+\.\d+|\d+', text)  # Matches both integers and decimals
+    """Extract all numbers (including decimals) from text safely."""
+    numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)  # Optimized regex
     return [float(num) for num in numbers]
+
 
 # Function to handle the arithmetic question and extracted data
 def handle_arithmetic_query(query, extracted_text):
@@ -60,7 +64,8 @@ def handle_arithmetic_query(query, extracted_text):
     # Example: Simple arithmetic query like "What is 25% of 200?"
     if "%" in query and "of" in query:
         # Extract the percentage and the number following "of"
-        match = re.search(r"(\d+)%\s+of\s+(\d+)", query)
+        match = regex.search(r"(?>\d+)%\s+of\s+(?>\d+)", query)
+
         if match:
             percent = float(match.group(1))
             number = float(match.group(2))
