@@ -1,5 +1,3 @@
-#FinChatbot should use Hugging Face as an LLM with prompt engineering for arithmetic operations and answering any question from a PDF. It should maintain an ongoing session for unlimited queries and display chat history on the left-hand side, like ChatGPT
-
 import os
 import fitz  # PyMuPDF for PDF text extraction
 import re  # For extracting numbers from text
@@ -71,30 +69,34 @@ if uploaded_file:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# Input box for user queries (arithmetic or informational)
-query = st.text_input("Ask a question (e.g., 'What is the total income?')")
+# Create columns for chat history and input box
+col1, col2 = st.columns([1, 3])
 
-if query:
-    with st.spinner("Processing your query..."):
-        try:
-            # Get the result for the query using Hugging Face model
-            result = handle_arithmetic_query(query, st.session_state.extracted_text)
-            
-            # Add the question and answer to the chat history
-            st.session_state.chat_history.append(f"Q: {query}\nA: {result}")
-            
-            # Provide the result to the user
-            st.subheader("Result:")
-            st.write(result)
-
-            # Reset the input field to allow the next question
-            st.text_input("Ask another question:", key="next_question")
-
-        except Exception as e:
-            st.error(f"Error fetching the result: {e}")
-
-# Display chat history
-if st.session_state.chat_history:
+# Left column for chat history
+with col1:
     st.subheader("Chat History:")
     for chat in st.session_state.chat_history[-5:]:  # Show last 5 interactions
         st.text(chat)
+
+# Right column for user input
+with col2:
+    query = st.text_input("Ask a question (e.g., 'What is the total income?')")
+
+    if query:
+        with st.spinner("Processing your query..."):
+            try:
+                # Get the result for the query using Hugging Face model
+                result = handle_arithmetic_query(query, st.session_state.extracted_text)
+                
+                # Add the question and answer to the chat history
+                st.session_state.chat_history.append(f"Q: {query}\nA: {result}")
+                
+                # Provide the result to the user
+                st.subheader("Result:")
+                st.write(result)
+
+                # Reset the input field to allow the next question
+                st.text_input("Ask another question:", key="next_question")
+
+            except Exception as e:
+                st.error(f"Error fetching the result: {e}")

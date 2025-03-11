@@ -7,6 +7,9 @@ from langchain.chains import LLMChain
 from langchain_openai import ChatOpenAI
 import boto3
 from datetime import datetime, timezone
+"""
+First Prompt: Hi, You are a highly analytical AI specializing in summarizing financial data. Using my code attached in this prompt, can you give me the code to make a fianacial chatbot. The chatbot should have a text input box and an attachment box, and a button. So, can you give me the code for that which can take input from user as a prompt and also a pdf of financial statement and then give the answer to the question that was asked.
+"""
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
@@ -19,25 +22,19 @@ session_table = dynamodb.Table(SESSION_TABLE)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-
 def authenticate_user():
-    """Redirect to login if the user is not authenticated."""
     if "u_id" not in st.session_state:
         st.warning("You must log in to access this page.")
         st.switch_page("pages/user_login.py")
         st.stop()
 
-
 def handle_logout():
-    """Logout button functionality."""
     if st.button("Logout"):
         st.session_state.clear()
         st.switch_page("pages/user_login.py")
         st.stop()
 
-
 def fetch_session_history(u_id):
-    """Fetch session history from DynamoDB."""
     try:
         response = session_table.scan(FilterExpression="u_id = :u", ExpressionAttributeValues={":u": u_id})
         return response.get("Items", [])
@@ -45,20 +42,21 @@ def fetch_session_history(u_id):
         st.error(f"Failed to fetch session history: {e}")
         return []
 
-
 def display_session_history():
-    """Display session history in the sidebar."""
     st.header("Session History")
     sessions = fetch_session_history(st.session_state["u_id"])
-    for session in sessions:
-        st.markdown(f"**Session ID:** {session['s_id']}")
-        for q, a in zip(session.get("questions", []), session.get("answers", [])):
-            st.markdown(f"- **Q:** {q}")
-            st.markdown(f"  **A:** {a}")
-
+    session_options = [session['s_id'] for session in sessions]
+    selected_session = st.selectbox("Select a session to continue or create a new one:", ["New Session"] + session_options)
+    
+    if selected_session == "New Session":
+        st.session_state["s_id"] = f"{st.session_state['u_id']}-{datetime.now(timezone.utc).isoformat()}"
+        st.session_state["qa_history"] = []
+    else:
+        st.session_state["s_id"] = selected_session
+        selected_session_data = next((session for session in sessions if session['s_id'] == selected_session), None)
+        st.session_state["qa_history"] = [{"query": q, "answer": a} for q, a in zip(selected_session_data.get("questions", []), selected_session_data.get("answers", []))]
 
 def process_pdf():
-    """Handles PDF upload and extraction."""
     pdf_file = st.file_uploader("Upload a PDF file", type=["pdf"])
     if pdf_file and st.button("Process PDF"):
         with st.spinner("Extracting data from the PDF..."):
@@ -71,9 +69,7 @@ def process_pdf():
             else:
                 st.error("Failed to extract data from the PDF.")
 
-
 def answer_query_from_pdf(query, tables, texts):
-    """Search the extracted PDF data for an answer."""
     for table in tables:
         if query.lower() in table.lower():
             return f"Answer found in table: {table}"
@@ -84,9 +80,7 @@ def answer_query_from_pdf(query, tables, texts):
 
     return None
 
-
 def handle_query():
-    """Handles user query and response display."""
     if "tables" in st.session_state and "texts" in st.session_state:
         query = st.text_input("Enter your query:")
         if query:
@@ -112,21 +106,17 @@ def handle_query():
                     answer = f"**Answer from GPT-4o-Mini:** {llm_answer}"
 
                 st.session_state["qa_history"].append({"query": query, "answer": answer})
-                store_session_in_dynamodb(st.session_state["u_id"], query, answer)
+                store_session_in_dynamodb(st.session_state["u_id"], st.session_state["s_id"], query, answer)
 
         if st.session_state["qa_history"]:
             st.subheader("Question-Answer History")
             for i, qa in enumerate(st.session_state["qa_history"], 1):
                 st.markdown(f"**Q{i}: {qa['query']}**")
                 st.write(f"{qa['answer']}")
-
     else:
         st.info("Please upload and process a PDF to start querying.")
 
-
-def store_session_in_dynamodb(u_id, question, answer):
-    """Stores user session data in DynamoDB."""
-    s_id = f"{u_id}-{datetime.now(timezone.utc).date()}"
+def store_session_in_dynamodb(u_id, s_id, question, answer):
     try:
         response = session_table.get_item(Key={"s_id": s_id})
         if "Item" in response:
@@ -149,9 +139,7 @@ def store_session_in_dynamodb(u_id, question, answer):
     except Exception as e:
         st.error(f"Failed to store session data: {e}")
 
-
 def main():
-    """Main function to run the Streamlit app."""
     st.title("Financial Chatbot")
 
     authenticate_user()
@@ -165,7 +153,6 @@ def main():
         process_pdf()
 
     handle_query()
-
 
 if __name__ == "__main__":
     main()
