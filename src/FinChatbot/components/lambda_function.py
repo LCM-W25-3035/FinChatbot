@@ -29,19 +29,20 @@ def lambda_handler(event, context):
     # Tokenize input with same parameters as reference
     inputs = tokenizer(
         input_text,
-        truncation=True,
-        padding=True,
-        return_tensors="pt"
+        truncation = True,
+        padding = True,
+        return_tensors = "pt"
     )
     
     # Get prediction
     with torch.no_grad():
         outputs = model(**inputs)
-        prediction = outputs.logits.argmax(dim=-1).item()
+        prediction = outputs.logits.argmax(dim = -1).item()
     
     # Convert to label
     label = pred_label(prediction)
     
+    # Return only the prediction
     return {
         "statusCode": 200,
         "body": json.dumps({"prediction": label})
