@@ -7,9 +7,9 @@ from langchain.chains import LLMChain
 from langchain_openai import ChatOpenAI
 import boto3
 from datetime import datetime, timezone
-"""
-First Prompt: Hi, You are a highly analytical AI specializing in summarizing financial data. Using my code attached in this prompt, can you give me the code to make a fianacial chatbot. The chatbot should have a text input box and an attachment box, and a button. So, can you give me the code for that which can take input from user as a prompt and also a pdf of financial statement and then give the answer to the question that was asked.
-"""
+
+#### First Prompt: Hi, You are a highly analytical AI specializing in summarizing financial data. Using my code attached in this prompt, can you give me the code to make a fianacial chatbot. The chatbot should have a text input box and an attachment box, and a button. So, can you give me the code for that which can take input from user as a prompt and also a pdf of financial statement and then give the answer to the question that was asked.
+
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
