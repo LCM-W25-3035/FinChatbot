@@ -1,3 +1,8 @@
+
+'''I uploaded `extraction.py`, `app.py`, files and asked. 
+Now I need to implement parallel processing to optimize the PDF processing. What changes need to be done in which file?'''
+
+
 import os
 from dotenv import load_dotenv, find_dotenv
 #from FinChatbot.pipeline.extraction import get_data
@@ -9,6 +14,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.memory import ConversationBufferMemory
 from FinChatbot.pipeline.pdfprocessing import process_pdf_parallel
+import multiprocessing
 # Load environment variables
 load_dotenv(find_dotenv())
 
@@ -19,8 +25,12 @@ class SpanLLM:
         """
         # Process PDF
         file_bytes = pdf_file.getvalue()
-        #tables, texts = get_data(file_bytes=file_bytes)
-        tables, texts = process_pdf_parallel(file_bytes=file_bytes, num_chunks=5)  # Example with 5 chunks
+        file_size_mb = len(file_bytes) / (1024 * 1024)  # Convert bytes to MB
+        num_chunks = min(10, max(3, int(file_size_mb * 2)))  # Dynamically adjust chunk count
+
+        # Utilize multiprocessing for PDF processing
+        with multiprocessing.Pool(processes=4) as pool:
+            tables, texts = process_pdf_parallel(file_bytes=file_bytes, num_chunks=num_chunks)
         
         table_summaries, text_summaries = get_summary(tables, texts)
 
