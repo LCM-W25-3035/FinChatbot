@@ -16,11 +16,7 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 USER_TABLE = os.getenv("USER_TABLE")
 S3_BUCKET = os.getenv("S3_BUCKET")
 
-# Sector options
-SECTOR_CHOICES = [
-    "Technology", "Healthcare", "Finance", "Energy",
-    "Education", "Manufacturing", "Retail"
-]
+SECTOR_CHOICES = ["Technology", "Healthcare", "Finance", "Education", "Other"]
 
 # Initialize AWS clients
 dynamodb = boto3.resource(
@@ -40,20 +36,25 @@ def fetch_users():
         return []
 
 def process_pdf_entries(pdf_files):
-    """Convert all entries to modern format with sector"""
     processed = []
     for entry in pdf_files:
         if isinstance(entry, str):
+            # Handle legacy format
+            sector = "Other"
+            if "/" in entry:
+                parts = entry.split("/")
+                if len(parts) >= 3 and parts[2] in SECTOR_CHOICES:
+                    sector = parts[2]
             processed.append({
                 "file_key": entry,
                 "filename": entry.split("/")[-1],
-                "sector": "Uncategorized",
+                "sector": sector,
                 "upload_date": "2023-01-01T00:00:00",
                 "size": 0,
                 "storage_class": "STANDARD"
             })
         else:
-            entry.setdefault("sector", "Uncategorized")
+            entry.setdefault("sector", "Other")
             entry.setdefault("upload_date", datetime.now().isoformat())
             entry.setdefault("size", 0)
             entry.setdefault("storage_class", "STANDARD")
@@ -63,15 +64,19 @@ def process_pdf_entries(pdf_files):
 def upload_pdf(file, user_id, user_email, pdf_limit, sector):
     try:
         timestamp = datetime.now().timestamp()
-        file_key = f"users/{user_id}/{timestamp}_{file.name}"
+        # New sector-based path
+        file_key = f"users/{user_id}/{sector}/{timestamp}_{file.name}"
         
-        # Upload to S3
+        # Upload with metadata and tags
         s3.upload_fileobj(
             file, S3_BUCKET, file_key,
-            ExtraArgs={"ContentType": "application/pdf"}
+            ExtraArgs={
+                "ContentType": "application/pdf",
+                "Metadata": {"sector": sector},
+                "Tagging": f"sector={sector}"
+            }
         )
         
-        # Create metadata
         pdf_metadata = {
             "file_key": file_key,
             "filename": file.name,
@@ -99,15 +104,13 @@ def delete_pdf(user_id, user_email, file_key):
         # Delete from S3
         s3.delete_object(Bucket=S3_BUCKET, Key=file_key)
         
-        # Get and process PDF entries
+        # Update DynamoDB
         response = user_table.get_item(Key={"u_id": user_id, "u_email": user_email})
         user_data = response.get("Item", {})
         pdf_list = process_pdf_entries(user_data.get("pdf_files", []))
         
-        # Filter out deleted PDF
         new_pdf_list = [pdf for pdf in pdf_list if pdf["file_key"] != file_key]
         
-        # Update DynamoDB
         user_table.update_item(
             Key={"u_id": user_id, "u_email": user_email},
             UpdateExpression="SET pdf_files = :new_list",
@@ -117,6 +120,49 @@ def delete_pdf(user_id, user_email, file_key):
         st.rerun()
     except Exception as e:
         st.error(f"Delete error: {str(e)}")
+
+def migrate_existing_files():
+    """Admin function to add sector organization to existing files"""
+    if st.button("Migrate Existing Files to Sector Structure"):
+        users = fetch_users()
+        for user in users:
+            user_id = user["u_id"]
+            pdf_files = process_pdf_entries(user.get("pdf_files", []))
+            
+            for pdf in pdf_files:
+                try:
+                    # Get current file details
+                    old_key = pdf["file_key"]
+                    sector = pdf.get("sector", "Other")
+                    
+                    # New sector-based path
+                    new_key = f"users/{user_id}/{sector}/{old_key.split('/')[-1]}"
+                    
+                    # Copy file to new location
+                    s3.copy_object(
+                        Bucket=S3_BUCKET,
+                        CopySource={"Bucket": S3_BUCKET, "Key": old_key},
+                        Key=new_key,
+                        Metadata={"sector": sector},
+                        Tagging=f"sector={sector}",
+                        MetadataDirective="REPLACE"
+                    )
+                    
+                    # Delete old file
+                    s3.delete_object(Bucket=S3_BUCKET, Key=old_key)
+                    
+                    # Update DynamoDB record
+                    user_table.update_item(
+                        Key={"u_id": user_id, "u_email": user["u_email"]},
+                        UpdateExpression="SET pdf_files = :new_list",
+                        ExpressionAttributeValues={
+                            ":new_list": [{**pdf, "file_key": new_key}]
+                        }
+                    )
+                    
+                except Exception as e:
+                    st.error(f"Migration failed for {old_key}: {str(e)}")
+        st.success("Migration completed!")
 
 def handle_pdf_management(users):
     selected_user = st.selectbox("Select user", 
@@ -134,7 +180,7 @@ def handle_pdf_management(users):
             with col1:
                 uploaded_file = st.file_uploader("PDF File", type=["pdf"])
             with col2:
-                sector = st.selectbox("Sector", SECTOR_CHOICES)
+                sector = st.selectbox("Sector", SECTOR_CHOICES, index=4)
             
             if st.form_submit_button("Upload"):
                 if len(pdf_files) >= user_data.get("pdf_limit", 5):
@@ -167,8 +213,12 @@ def handle_pdf_management(users):
 
 def main():
     st.title("Document Management System")
-    users = fetch_users()
     
+    # Migration panel
+    with st.expander("Admin Tools"):
+        migrate_existing_files()
+    
+    users = fetch_users()
     if not users:
         st.warning("No users found in the system")
         return
