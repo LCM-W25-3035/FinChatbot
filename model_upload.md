@@ -79,7 +79,7 @@ git clone https://huggingface.co/rahul14/span-arithmetic-classification
 
 10. Unmount after downloading the model.
 ```bash
-sudo unmount /efs
+sudo umount /efs
 ```
 
 ## Step 3: Attach EFS to AWS Lambda
