@@ -9,8 +9,7 @@ import os
 from dotenv import load_dotenv, find_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-env_path = 'C:/Users/Sarojkumar Lal/FinChatbot/.env'
-load_dotenv(dotenv_path=env_path)
+load_dotenv(find_dotenv())
 
 UNSTRUCTURED_API_URL = os.getenv("UNSTRUCTURED_API_URL")
 UNSTRUCTURED_API_KEY = os.getenv("UNSTRUCTURED_API_KEY")

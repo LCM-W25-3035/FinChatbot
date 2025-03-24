@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv, find_dotenv
 from FinChatbot.pipeline.extraction import get_data
+from FinChatbot.pipeline.pdfprocessing import process_pdf_parallel
 from FinChatbot.pipeline.summarizer import get_summary
 from FinChatbot.pipeline.mvr import create_multi_vector_retriever
 from langchain_community.vectorstores import Chroma, FAISS
