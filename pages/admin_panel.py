@@ -1,9 +1,9 @@
 import streamlit as st
 import boto3
 import os
+import pandas as pd
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
-import pandas as pd
 from datetime import datetime
 
 # Load environment variables
@@ -11,7 +11,6 @@ load_dotenv()
 
 # AWS Configuration
 AWS_REGION_DYNAMO = os.getenv("AWS_REGION_DYNAMO")
-AWS_REGION_S3 = os.getenv("AWS_REGION_S3")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 USER_TABLE = os.getenv("USER_TABLE")
@@ -23,169 +22,25 @@ SECTOR_CHOICES = [
     "Education", "Manufacturing", "Retail"
 ]
 
-# Initialize AWS Clients
+# Initialize AWS clients
 dynamodb = boto3.resource(
     "dynamodb",
     region_name=AWS_REGION_DYNAMO,
     aws_access_key_id=AWS_ACCESS_KEY_ID,
     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
 )
-s3 = boto3.client(
-    "s3",
-    region_name=AWS_REGION_S3,
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-)
-
+s3 = boto3.client("s3")
 user_table = dynamodb.Table(USER_TABLE)
 
 def fetch_users():
-    """Fetch all users from DynamoDB."""
     try:
-        response = user_table.scan()
-        return response.get("Items", [])
+        return user_table.scan().get("Items", [])
     except ClientError as e:
         st.error(f"Error fetching users: {str(e)}")
         return []
 
-def update_user_data(user_id, user_email, new_password, approval_status, pdf_limit):
-    """Update user data in DynamoDB."""
-    try:
-        update_expr = []
-        expr_values = {}
-
-        if new_password:
-            update_expr.append("u_password = :new_pwd")
-            expr_values[":new_pwd"] = new_password
-
-        update_expr.append("is_approved = :approval")
-        expr_values[":approval"] = approval_status
-
-        update_expr.append("pdf_limit = :pdf_limit")
-        expr_values[":pdf_limit"] = int(pdf_limit)
-
-        user_table.update_item(
-            Key={"u_id": user_id, "u_email": user_email},
-            UpdateExpression="SET " + ", ".join(update_expr),
-            ExpressionAttributeValues=expr_values
-        )
-        st.success(f"User {user_email} updated successfully!")
-        st.rerun()
-    except ClientError as e:
-        st.error(f"Error updating user: {str(e)}")
-
-def upload_pdf(file, user_id, user_email, pdf_limit, sector):
-    """Upload PDF with sector metadata to S3 and DynamoDB."""
-    try:
-        # Generate unique file key with timestamp
-        timestamp = datetime.now().timestamp()
-        file_key = f"users/{user_id}/{timestamp}_{file.name}"
-        
-        # Debug: Show upload parameters
-        st.write("## Debug Information")
-        st.write(f"Uploading for user: {user_id} ({user_email})")
-        st.write(f"Selected sector: {sector}")
-        st.write(f"File name: {file.name}")
-        st.write(f"Temporary file key: {file_key}")
-        
-        # Get current user data
-        st.write("Fetching current user data...")
-        response = user_table.get_item(Key={"u_id": user_id, "u_email": user_email})
-        user_data = response.get("Item", {})
-        pdf_list = user_data.get("pdf_files", [])
-        
-        # Validate upload limit
-        st.write(f"Current PDF count: {len(pdf_list)}/{pdf_limit}")
-        if len(pdf_list) >= int(pdf_limit):
-            st.error(f"Upload limit reached! Maximum {pdf_limit} PDFs allowed")
-            return
-
-        # Upload to S3
-        st.write("Starting S3 upload...")
-        s3.upload_fileobj(
-            Fileobj=file,
-            Bucket=S3_BUCKET,
-            Key=file_key,
-            ExtraArgs={"ContentType": "application/pdf"}
-        )
-        st.write("S3 upload completed successfully!")
-        
-        # Create metadata object with sector
-        pdf_metadata = {
-            "file_key": file_key,
-            "filename": file.name,
-            "sector": sector,
-            "upload_date": datetime.now().isoformat()
-        }
-        
-        # Debug: Show complete metadata
-        st.write("Prepared PDF metadata:", pdf_metadata)
-        
-        # Update DynamoDB
-        st.write("Starting DynamoDB update...")
-        response = user_table.update_item(
-            Key={"u_id": user_id, "u_email": user_email},
-            UpdateExpression="SET pdf_files = list_append(if_not_exists(pdf_files, :empty_list), :pdf)",
-            ExpressionAttributeValues={
-                ":pdf": [pdf_metadata],
-                ":empty_list": []
-            },
-            ReturnValues="ALL_NEW"
-        )
-        
-        # Show debug info
-        st.write("DynamoDB Update Response:", response)
-        
-        # Verify update
-        if 'Attributes' in response:
-            st.success(f"PDF successfully uploaded to {sector} sector!")
-            st.write("Verification - New PDF list:", response['Attributes'].get('pdf_files', []))
-            st.rerun()
-        else:
-            st.error("Update failed - no attributes returned")
-        
-    except ClientError as e:
-        error_msg = e.response['Error']['Message']
-        st.error(f"AWS API Error: {error_msg}")
-        st.write("Full error details:", e.response)
-    except Exception as e:
-        st.error(f"Unexpected error: {str(e)}")
-        st.write("Exception details:", repr(e))
-
-def delete_pdf(user_id, user_email, file_key):
-    """Delete PDF from S3 and DynamoDB."""
-    try:
-        st.write("Starting delete operation...")
-        st.write(f"Deleting file: {file_key}")
-        
-        # Delete from S3
-        s3.delete_object(Bucket=S3_BUCKET, Key=file_key)
-        st.write("S3 deletion completed")
-        
-        # Update DynamoDB
-        response = user_table.get_item(Key={"u_id": user_id, "u_email": user_email})
-        user_data = response.get("Item", {})
-        pdf_list = user_data.get("pdf_files", [])
-        
-        # Create new list without the deleted PDF
-        new_pdf_list = [pdf for pdf in pdf_list if pdf.get("file_key") != file_key]
-        
-        st.write("Updating DynamoDB with new PDF list:", new_pdf_list)
-        user_table.update_item(
-            Key={"u_id": user_id, "u_email": user_email},
-            UpdateExpression="SET pdf_files = :new_list",
-            ExpressionAttributeValues={":new_list": new_pdf_list}
-        )
-        
-        st.success("PDF deleted successfully!")
-        st.rerun()
-    except ClientError as e:
-        st.error(f"Delete error: {e.response['Error']['Message']}")
-    except Exception as e:
-        st.error(f"Unexpected error: {str(e)}")
-
 def process_pdf_entries(pdf_files):
-    """Convert legacy entries to modern format with sector."""
+    """Convert all entries to modern format with sector"""
     processed = []
     for entry in pdf_files:
         if isinstance(entry, str):
@@ -193,117 +48,132 @@ def process_pdf_entries(pdf_files):
                 "file_key": entry,
                 "filename": entry.split("/")[-1],
                 "sector": "Uncategorized",
-                "upload_date": "2023-01-01T00:00:00"
+                "upload_date": "2023-01-01T00:00:00",
+                "size": 0,
+                "storage_class": "STANDARD"
             })
         else:
-            entry["sector"] = entry.get("sector", "Uncategorized")
+            entry.setdefault("sector", "Uncategorized")
+            entry.setdefault("upload_date", datetime.now().isoformat())
+            entry.setdefault("size", 0)
+            entry.setdefault("storage_class", "STANDARD")
             processed.append(entry)
     return processed
 
-def main():
-    st.title("Document Management Admin Panel")
-    
-    # Add connection check
+def upload_pdf(file, user_id, user_email, pdf_limit, sector):
     try:
-        user_table.table_status  # Simple connection check
+        timestamp = datetime.now().timestamp()
+        file_key = f"users/{user_id}/{timestamp}_{file.name}"
+        
+        # Upload to S3
+        s3.upload_fileobj(
+            file, S3_BUCKET, file_key,
+            ExtraArgs={"ContentType": "application/pdf"}
+        )
+        
+        # Create metadata
+        pdf_metadata = {
+            "file_key": file_key,
+            "filename": file.name,
+            "sector": sector,
+            "upload_date": datetime.now().isoformat(),
+            "size": file.size,
+            "storage_class": "STANDARD"
+        }
+        
+        user_table.update_item(
+            Key={"u_id": user_id, "u_email": user_email},
+            UpdateExpression="SET pdf_files = list_append(if_not_exists(pdf_files, :empty_list), :pdf)",
+            ExpressionAttributeValues={
+                ":pdf": [pdf_metadata],
+                ":empty_list": []
+            }
+        )
+        st.success(f"PDF uploaded to {sector} sector!")
+        st.rerun()
     except Exception as e:
-        st.error(f"Failed to connect to DynamoDB: {str(e)}")
-        return
+        st.error(f"Upload error: {str(e)}")
+
+def delete_pdf(user_id, user_email, file_key):
+    try:
+        # Delete from S3
+        s3.delete_object(Bucket=S3_BUCKET, Key=file_key)
+        
+        # Get and process PDF entries
+        response = user_table.get_item(Key={"u_id": user_id, "u_email": user_email})
+        user_data = response.get("Item", {})
+        pdf_list = process_pdf_entries(user_data.get("pdf_files", []))
+        
+        # Filter out deleted PDF
+        new_pdf_list = [pdf for pdf in pdf_list if pdf["file_key"] != file_key]
+        
+        # Update DynamoDB
+        user_table.update_item(
+            Key={"u_id": user_id, "u_email": user_email},
+            UpdateExpression="SET pdf_files = :new_list",
+            ExpressionAttributeValues={":new_list": new_pdf_list}
+        )
+        st.success("PDF deleted successfully!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"Delete error: {str(e)}")
+
+def handle_pdf_management(users):
+    selected_user = st.selectbox("Select user", 
+                               [(u['u_id'], u['u_email']) for u in users], 
+                               format_func=lambda x: x[1])
     
-    users = fetch_users()
-    if not users:
-        st.warning("No registered users found.")
-        return
-    
-    for user in users:
-        with st.expander(f"User: {user['u_email']}", expanded=False):
-            # Approval controls
-            col1, col2 = st.columns(2)
+    if selected_user:
+        user_id, user_email = selected_user
+        user_data = user_table.get_item(Key={"u_id": user_id, "u_email": user_email}).get("Item", {})
+        pdf_files = process_pdf_entries(user_data.get("pdf_files", []))
+        
+        # Upload section
+        with st.form("upload_form"):
+            col1, col2 = st.columns([3, 2])
             with col1:
-                if st.button(f"Approve {user['u_id']}"):
-                    update_user_data(
-                        user["u_id"], 
-                        user["u_email"], 
-                        None, 
-                        True, 
-                        user.get("pdf_limit", 5)
-                    )
+                uploaded_file = st.file_uploader("PDF File", type=["pdf"])
             with col2:
-                if st.button(f"Disapprove {user['u_id']}"):
-                    update_user_data(
-                        user["u_id"], 
-                        user["u_email"], 
-                        None, 
-                        False, 
-                        user.get("pdf_limit", 5)
-                    )
+                sector = st.selectbox("Sector", SECTOR_CHOICES)
+            
+            if st.form_submit_button("Upload"):
+                if len(pdf_files) >= user_data.get("pdf_limit", 5):
+                    st.error("Upload limit reached!")
+                elif uploaded_file:
+                    upload_pdf(uploaded_file, user_id, user_email, 
+                              user_data.get("pdf_limit", 5), sector)
+                else:
+                    st.warning("Please select a PDF file")
 
-            # PDF management
-            st.subheader("Document Management")
-            current_limit = int(user.get("pdf_limit", 5))
-            pdf_limit = st.number_input(
-                "Maximum PDF Allocations",
-                value=current_limit,
-                min_value=1,
-                max_value=20,
-                key=f"limit_{user['u_id']}"
-            )
+        # Display section
+        st.subheader("Managed Documents")
+        if pdf_files:
+            for pdf in pdf_files:
+                col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 1, 1])
+                with col1:
+                    st.write(pdf['filename'])
+                with col2:
+                    st.write(pdf['sector'])
+                with col3:
+                    st.write(pd.to_datetime(pdf['upload_date']).strftime('%Y-%m-%d %H:%M'))
+                with col4:
+                    st.write(f"{pdf['size']/1024/1024:.1f} MB")
+                with col5:
+                    if st.button("Delete", key=f"del_{pdf['file_key']}"):
+                        delete_pdf(user_id, user_email, pdf['file_key'])
+                st.markdown("---")
+        else:
+            st.info("No documents found")
 
-            # File upload section
-            st.write("### Upload New Document")
-            upload_col, sector_col = st.columns([3, 2])
-            with upload_col:
-                uploaded_file = st.file_uploader(
-                    "Select PDF File",
-                    type=["pdf"],
-                    key=f"upload_{user['u_id']}"
-                )
-            with sector_col:
-                sector = st.selectbox(
-                    "Document Sector",
-                    SECTOR_CHOICES,
-                    index=0,
-                    key=f"sector_{user['u_id']}"
-                )
-
-            if uploaded_file:
-                if st.button("Upload Document", key=f"upload_btn_{user['u_id']}"):
-                    upload_pdf(uploaded_file, user["u_id"], user["u_email"], pdf_limit, sector)
-
-            # Display existing documents
-            if "pdf_files" in user:
-                st.write("### Managed Documents")
-                if st.button("Refresh List", key=f"refresh_{user['u_id']}"):
-                    st.rerun()
-                
-                processed_pdfs = process_pdf_entries(user["pdf_files"])
-                
-                # Group by sector
-                sector_groups = {}
-                for pdf in processed_pdfs:
-                    sector = pdf.get("sector", "Uncategorized")
-                    sector_groups.setdefault(sector, []).append(pdf)
-
-                # Display documents
-                for sector, docs in sector_groups.items():
-                    st.write(f"#### {sector} Sector ({len(docs)} documents)")
-                    for doc in docs:
-                        col1, col2, col3 = st.columns([4, 3, 2])
-                        with col1:
-                            st.markdown(f"**File Name:** `{doc['filename']}`")
-                        with col2:
-                            upload_time = pd.to_datetime(doc['upload_date']).strftime('%Y-%m-%d %H:%M')
-                            st.markdown(f"**Uploaded:** {upload_time}")
-                        with col3:
-                            url = s3.generate_presigned_url(
-                                'get_object',
-                                Params={'Bucket': S3_BUCKET, 'Key': doc['file_key']},
-                                ExpiresIn=3600
-                            )
-                            st.markdown(f"[Download PDF]({url})")
-                            if st.button("Delete", key=f"del_{doc['file_key']}"):
-                                delete_pdf(user["u_id"], user["u_email"], doc['file_key'])
-                    st.markdown("---")
+def main():
+    st.title("Document Management System")
+    users = fetch_users()
+    
+    if not users:
+        st.warning("No users found in the system")
+        return
+    
+    handle_pdf_management(users)
 
 if __name__ == "__main__":
     main()

@@ -57,16 +57,27 @@ class SpanLLM:
         Current Question:
         {question}
 
-        Please generate a response that thoughtfully considers both the conversation history and \
-        the provided document context. Your answer should be concise and clear, \
-        containing between 10 and 200 words depending on the complexity of the question. \
-        Avoid adding any information that is not directly supported by the given context.
+        Generate a response that thoughtfully integrates both the conversation history \
+        and the provided document context, emphasizing finance-specific details when applicable. \
+        The answer should be concise and clear, ranging between 10 and 200 words based on the \
+        complexity of the question. Only include information directly supported by the given context.
+
+        Important Instructions:
+        - If the current question relates solely to previous inquiries or lacks new context, first verify the conversation history(especially the last question asked). If it is not connected to any prior question, reply with: "The pdf doesn't contain context regarding the question."
+        - For finance-related inquiries, incorporate appropriate financial terminology and domain expertise.
+        - Do not add any external details not present in the document context.
+        - Highlight all critical numbers and percentages in **bold**.
 
         Policies:
-        - Strictly adhere to the provided document context (mvr); do not introduce external details.
-        - Use clear, user-friendly language throughout your response.
-        - Ensure all information is derived only from the given context and conversation history.
+        - NEVER infer relationships between financial concepts.
+        - PRESERVE the original context's numerical precision.
+        - Strictly adhere to the provided document context (mvr); avoid introducing external details.
+        - Use clear, user-friendly language throughout the response.
+        - Ensure all information is derived solely from the given context and conversation history.
         - Maintain accuracy and clarity without unnecessary elaboration.
+        - Use bullet points where necessary.
+
+        IF THE OUTPUT CANNOT BE GENERATED FROM THE CONTEXT, JUST REPLY WITH - "The pdf doesn't contain context regarding the question."
         """
         )
 
