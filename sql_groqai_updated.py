@@ -1,9 +1,18 @@
+'''
+I uploaded the .py file and gave prompt that i am getting some formatting issues. 
+'''
+
 import os
+import io
 import sqlite3
 import streamlit as st
-import fitz  # PyMuPDF for PDF processing
+import pdfplumber  # Using pdfplumber instead of PyMuPDF
 import requests
 from dotenv import load_dotenv
+import json
+import pandas as pd
+import logging
+import re
 
 # Load environment variables
 load_dotenv()
@@ -18,6 +27,10 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 # SQLite Database Setup
 DB_NAME = "financial_data.db"
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Initialize the database
 def init_db():
     """Initialize the SQLite database and create tables if they don't exist."""
     conn = sqlite3.connect(DB_NAME)
@@ -37,6 +50,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Save extracted data to the database
 def save_to_db(texts, tables):
     """Save extracted texts and tables to the SQLite database."""
     conn = sqlite3.connect(DB_NAME)
@@ -44,17 +58,20 @@ def save_to_db(texts, tables):
     
     # Save texts
     for text in texts:
-        if isinstance(text, str):  # Ensure the text is a string
-            cursor.execute("INSERT INTO texts (content) VALUES (?)", (text,))
+        if isinstance(text, str):
+            cleaned_text = text.strip()
+            cursor.execute("INSERT INTO texts (content) VALUES (?)", (cleaned_text,))
     
-    # Save tables
+    # Save tables as JSON strings
     for table in tables:
-        if isinstance(table, str):  # Ensure the table content is a string
-            cursor.execute("INSERT INTO tables (content) VALUES (?)", (table,))
+        if isinstance(table, list):
+            table_json = json.dumps(table)
+            cursor.execute("INSERT INTO tables (content) VALUES (?)", (table_json,))
     
     conn.commit()
     conn.close()
 
+# Fetch data from the database
 def fetch_from_db():
     """Fetch all texts and tables from the SQLite database."""
     conn = sqlite3.connect(DB_NAME)
@@ -62,42 +79,52 @@ def fetch_from_db():
     cursor.execute("SELECT content FROM texts")
     texts = [row[0] for row in cursor.fetchall()]
     cursor.execute("SELECT content FROM tables")
-    tables = [row[0] for row in cursor.fetchall()]
+    tables = [json.loads(row[0]) for row in cursor.fetchall()]
     conn.close()
     return texts, tables
 
-# Function to Extract Data from PDFs
+# Extract data from PDFs
 def extract_pdf_data(file_bytes):
     """
-    Extract tables and text from a PDF file using PyMuPDF.
+    Extract structured data from text-based "tables"
     """
     tables = []
     texts = []
 
     try:
-        pdf_document = fitz.open("pdf", file_bytes)
-
-        for page in pdf_document:
-            text = page.get_text("text")
-            if text.strip():
-                texts.append(text)
-
-            table_data = page.get_text("blocks")
-            if table_data:
-                tables.append(table_data)
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                # Extract raw text
+                text = page.extract_text()
+                if text:
+                    cleaned_text = text.strip()
+                    texts.append(cleaned_text)
+                    
+                    # Enhanced: Detect text-based tables
+                    lines = cleaned_text.split('\n')
+                    current_table = []
+                    for line in lines:
+                        if '$' in line and any(char.isdigit() for char in line):
+                            # Split on 2+ spaces or dollar signs
+                            row = [cell.strip() for cell in re.split(r'\s{2,}|\$', line) if cell.strip()]
+                            current_table.append(row)
+                    
+                    if current_table:
+                        tables.append(current_table)
 
     except Exception as e:
+        logging.error(f"Error processing PDF: {e}")
         raise ValueError(f"Error processing PDF: {e}")
 
     return tables, texts
 
-# Function to calculate percentage increase
+# Calculate percentage increase
 def calculate_percentage_increase(old_value, new_value):
     if old_value == 0:
         return "N/A (Cannot divide by zero)"
     return round(((new_value - old_value) / old_value) * 100, 2)
 
-# Function to process arithmetic questions
+# Process arithmetic queries
 def process_arithmetic_query(query):
     """
     Extracts financial data and performs necessary arithmetic calculations.
@@ -107,13 +134,12 @@ def process_arithmetic_query(query):
 
     if "percentage increase in net income" in query.lower():
         percentage_change = calculate_percentage_increase(net_income_2022, net_income_2023)
-
         return (f"The percentage increase in net income from 2022 to 2023 is {percentage_change}%.\n\n"
                 f"Calculation: (({net_income_2023} - {net_income_2022}) / {net_income_2022}) * 100 = {percentage_change}%.")
 
     return None
 
-# Function to query Groq AI for non-arithmetic queries
+# Query Groq AI for non-arithmetic queries
 def ask_groq(query, context=""):
     """
     Send a query to Groq AI for answering based on the given context.
@@ -139,7 +165,7 @@ def ask_groq(query, context=""):
     except requests.exceptions.RequestException as e:
         return f"API Error: {e}"
 
-# Function to handle file upload
+# Handle file upload
 def handle_file_upload():
     """
     Manages the file upload process and extracts text/tables from the PDF.
@@ -148,18 +174,22 @@ def handle_file_upload():
 
     if pdf_file and st.sidebar.button("Process PDF"):
         with st.spinner("Extracting data from the PDF..."):
-            file_bytes = pdf_file.getvalue()
-            tables, texts = extract_pdf_data(file_bytes)
+            try:
+                file_bytes = pdf_file.getvalue()
+                tables, texts = extract_pdf_data(file_bytes)
 
-            if tables or texts:
-                save_to_db(texts, tables)  # Save extracted data to SQL database
-                st.session_state["tables"] = tables
-                st.session_state["texts"] = texts
-                st.success("PDF data extracted and saved to database successfully!")
-            else:
-                st.error("Failed to extract data from the PDF.")
+                if tables or texts:
+                    save_to_db(texts, tables)
+                    st.session_state["tables"] = tables
+                    st.session_state["texts"] = texts
+                    st.success("PDF data extracted and saved successfully!")
+                else:
+                    st.error("No data found in PDF.")
+                    
+            except Exception as e:
+                st.error(f"Error processing PDF: {str(e)}")
 
-# Function to process user queries
+# Handle user queries
 def handle_query():
     """
     Handles user input queries and fetches answers from extracted PDF data or Groq AI.
@@ -174,21 +204,16 @@ def handle_query():
                 answer = f"**Answer:** {arithmetic_answer}"
             else:
                 st.write("Query not found in PDF. Using Groq AI...")
-
-                # Fetch data from SQL database for context
                 texts, tables = fetch_from_db()
                 context = " ".join(texts)[:3000]  # Truncate for payload size
                 groq_answer = ask_groq(query, context)
                 answer = f"**Answer from Groq AI:** {groq_answer}"
 
-            # Store Q&A history
             st.session_state["qa_history"].append({"query": query, "answer": answer})
 
-# Function to display question-answer history
+# Display question-answer history
 def display_qa_history():
-    """
-    Displays the history of previously asked questions and their answers.
-    """
+    """Display only Q&A history without tables"""
     if "qa_history" in st.session_state:
         st.subheader("Question-Answer History")
         for i, qa in enumerate(st.session_state["qa_history"], 1):
@@ -213,6 +238,7 @@ def main():
     # Initialize the database
     init_db()
 
+    # Handle file upload and queries
     handle_file_upload()
     handle_query()
     display_qa_history()
