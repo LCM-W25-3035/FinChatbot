@@ -2,7 +2,14 @@ import streamlit as st
 from FinChatbot.pipeline.llm_chain import (ArithmeticLLM,
                                            SpanLLM)
 from FinChatbot.pipeline.classification import model_predict
-from FinChatbot.components.model import get_prediction
+from FinChatbot.pipeline.model_classification import predict_query
+import os
+from dotenv import find_dotenv, load_dotenv
+
+load_dotenv(find_dotenv())
+
+unstructured_api_url = os.getenv("UNSTRUCTURED_API_URL")
+unstructured_api_key = os.getenv("UNSTRUCTURED_API_KEY")
 
 def main():
     st.title("Fin-Tech ChatBot")
