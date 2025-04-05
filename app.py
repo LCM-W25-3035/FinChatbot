@@ -47,7 +47,7 @@ def main():
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     # Classify the user's query
-                    query_type = model_predict(prompt)
+                    query_type = predict_query(prompt)
 
                     # Handle based on the classification
                     if query_type == "span":
