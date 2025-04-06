@@ -75,7 +75,7 @@ def main():
             else:
                 st.success("Login successful! Redirecting to FinChatbot...")
                 st.session_state["u_id"] = response["u_id"]
-                st.switch_page("app_arithmetic_app.py")
+                st.switch_page("app.py")
 
 if __name__ == "__main__":
     main()
