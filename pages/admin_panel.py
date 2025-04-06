@@ -42,7 +42,11 @@ dynamodb = boto3.resource(
     aws_access_key_id=AWS_ACCESS_KEY_ID,
     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
 )
-s3 = boto3.client("s3")
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+)
 user_table = dynamodb.Table(USER_TABLE)
 
 def fetch_users():
@@ -59,23 +63,20 @@ def process_pdf_entries(pdf_files):
         processed_entry = {
             "file_key": "",
             "filename": "Unknown File",
-            "sector": "📦 Other",
+            "sector": SECTOR_CONFIG["other"],
             "upload_date": datetime.now().isoformat(),
-            "size": 0.0,
+            "size": Decimal(0),
             "storage_class": "STANDARD"
         }
 
         if isinstance(entry, dict):
-            # Extract filename from file_key if missing
-            filename = entry.get("filename")
-            if not filename and "file_key" in entry:
-                filename = entry["file_key"].split("/")[-1]
-                
+            filename = entry.get("filename") or entry.get("file_key", "").split("/")[-1]
+            clean_sector = entry.get("sector", "other")
             processed_entry.update({
                 "file_key": entry.get("file_key", ""),
-                "filename": filename or "Unknown File",
-                "sector": get_display_sector(entry.get("sector", "other")),
-                "size": float(entry.get("size", 0.0)),
+                "filename": filename,
+                "sector": get_display_sector(clean_sector),
+                "size": entry.get("size", Decimal(0)),
                 "upload_date": entry.get("upload_date", datetime.now().isoformat())
             })
 
@@ -100,7 +101,7 @@ def upload_pdf(file, user_id, user_email, pdf_limit, display_sector):
 
         user_data = user_table.get_item(Key={"u_id": user_id, "u_email": user_email}).get("Item", {})
         current_files = user_data.get("pdf_files", [])
-        user_limit = int(Decimal(user_data.get("pdf_limit", 5)))
+        user_limit = int(user_data.get("pdf_limit", Decimal(5)))
         
         if len(current_files) >= user_limit:
             raise ValueError(f"🚫 Limit reached ({user_limit} files)")
@@ -123,9 +124,9 @@ def upload_pdf(file, user_id, user_email, pdf_limit, display_sector):
         pdf_metadata = {
             "file_key": file_key,
             "filename": file.name,
-            "sector": display_sector,
+            "sector": clean_sector,
             "upload_date": datetime.now().isoformat(),
-            "size": float(file.size),
+            "size": Decimal(str(file.size)),
             "storage_class": "STANDARD"
         }
 
@@ -156,8 +157,8 @@ def delete_pdf(user_id, user_email, file_key):
         
         response = user_table.get_item(Key={"u_id": user_id, "u_email": user_email})
         user_data = response.get("Item", {})
-        pdf_list = process_pdf_entries(user_data.get("pdf_files", []))
-        new_pdf_list = [pdf for pdf in pdf_list if pdf["file_key"] != file_key]
+        pdf_list = user_data.get("pdf_files", [])
+        new_pdf_list = [pdf for pdf in pdf_list if pdf.get("file_key", "") != file_key]
         
         user_table.update_item(
             Key={"u_id": user_id, "u_email": user_email},
@@ -191,8 +192,8 @@ def admin_manage_users(users):
                     user_table.put_item(Item={
                         "u_id": new_id,
                         "u_email": new_email,
-                        "is_approved": approved,
                         "u_pwd": new_pwd,
+                        "is_approved": approved,
                         "pdf_limit": int(pdf_limit),
                         "pdf_files": [],
                         "registration_date": datetime.now().isoformat()
@@ -209,16 +210,16 @@ def admin_manage_users(users):
             cols = st.columns([1, 2, 1])
             with cols[0]:
                 approved = st.checkbox("✅ Approved", 
-                                    value=user.get("is_approved", False),
-                                    key=f"appr_{unique_key}")
-                current_limit = int(Decimal(user.get("pdf_limit", 5)))
+                                     value=user.get("is_approved", False),
+                                     key=f"appr_{unique_key}")
+                current_limit = int(user.get("pdf_limit", Decimal(5)))
                 limit = st.number_input("📚 Limit", 
-                                        value=current_limit,
-                                        key=f"lim_{unique_key}")
+                                      value=current_limit,
+                                      key=f"lim_{unique_key}")
             
             with cols[1]:
                 st.markdown(f"""
-                    📅 **Registered:** {user.get('registration_date', 'N/A')} 
+                    📅 **Registered:** {user.get('registration_date', 'N/A')}  
                     📁 **Files:** {len(user.get('pdf_files', []))}/{current_limit}
                 """)
             
@@ -234,20 +235,19 @@ def admin_manage_users(users):
                             }
                         )
                         st.success("🔄 User updated!")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"❌ Update failed: {str(e)}")
                 
                 if st.button("🗑️ Delete", key=f"del_{unique_key}"):
                     try:
-                        if "pdf_files" in user:
-                            file_keys = [pdf["file_key"] if isinstance(pdf, dict) else pdf 
-                                        for pdf in user["pdf_files"]]
-                            if file_keys:
-                                s3.delete_objects(
-                                    Bucket=S3_BUCKET,
-                                    Delete={"Objects": [{"Key": key} for key in file_keys]}
-                                )
-                        
+                        file_keys = [pdf["file_key"] if isinstance(pdf, dict) else pdf 
+                                   for pdf in user.get("pdf_files", [])]
+                        if file_keys:
+                            s3.delete_objects(
+                                Bucket=S3_BUCKET,
+                                Delete={"Objects": [{"Key": key} for key in file_keys]}
+                            )
                         user_table.delete_item(Key={"u_id": user["u_id"], "u_email": user["u_email"]})
                         st.success("🗑️ User deleted!")
                         st.rerun()
@@ -261,8 +261,8 @@ def handle_pdf_management(users):
         return
 
     user = st.selectbox("👤 Select User", 
-                        [(u['u_id'], u['u_email']) for u in users], 
-                        format_func=lambda x: f"{x[1]} ({x[0]})")
+                      [(u['u_id'], u['u_email']) for u in users], 
+                      format_func=lambda x: f"{x[1]} ({x[0]})")
     
     if user:
         u_id, u_email = user
@@ -273,7 +273,7 @@ def handle_pdf_management(users):
             
             st.subheader(f"📁 {u_email}'s Documents")
             cols = st.columns(3)
-            cols[0].metric("📚 File Limit", int(Decimal(data.get("pdf_limit", 5))))
+            cols[0].metric("📚 File Limit", int(data.get("pdf_limit", Decimal(5))))
             cols[1].metric("📁 Current Files", len(pdfs))
             cols[2].metric("🔄 Last Active", data.get("last_login", "Never"))
             
@@ -283,9 +283,7 @@ def handle_pdf_management(users):
                     sector = st.selectbox("📂 Sector", list(SECTOR_CONFIG.values()))
                     if st.form_submit_button("🚀 Upload"):
                         if file:
-                            upload_pdf(file, u_id, u_email, 
-                                        int(Decimal(data.get("pdf_limit", 5))), 
-                                        sector)
+                            upload_pdf(file, u_id, u_email, int(data.get("pdf_limit", Decimal(5))), sector)
                         else:
                             st.warning("⚠️ Select a PDF")
             
@@ -295,10 +293,10 @@ def handle_pdf_management(users):
                     cols = st.columns([4, 2, 2, 1, 1])
                     cols[0].markdown(f"**{pdf['filename']}**")
                     cols[1].markdown(f"📂 {pdf['sector']}")
-                    cols[2].markdown(f"📅 {pd.to_datetime(pdf['upload_date']).strftime('%Y-%m-%d')}")
-                    cols[3].markdown(f"📦 {float(pdf.get('size', 0))/1e6:.1f}MB")
+                    cols[2].markdown(f"📅 {pd.to_datetime(pdf['upload_date']).strftime('%Y-%m-%d')}")  # Fixed closing }
+                    cols[3].markdown(f"📦 {float(pdf.get('size', Decimal(0))) / 1e6:.1f}MB")  # Fixed parentheses
                     cols[4].button("🗑️", key=f"del_{pdf['file_key']}",
-                                    on_click=delete_pdf, args=(u_id, u_email, pdf['file_key']))
+                                  on_click=delete_pdf, args=(u_id, u_email, pdf['file_key']))
                     st.markdown("---")
             else:
                 st.info("📭 No documents found")
