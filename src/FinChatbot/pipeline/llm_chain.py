@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv, find_dotenv
 from FinChatbot.pipeline.extraction import get_data
-from FinChatbot.pipeline.pdfprocessing import process_pdf_parallel
 from FinChatbot.pipeline.summarizer import get_summary
 from FinChatbot.pipeline.mvr import create_multi_vector_retriever
 from langchain_community.vectorstores import Chroma, FAISS
@@ -14,9 +13,21 @@ from langchain.memory import ConversationBufferMemory
 load_dotenv(find_dotenv())
 
 class SpanLLM:
+    """
+    A language model class for answering context-aware, finance-specific queries 
+    from documents using multi-vector retrieval and conversation memory.
+    """
+
     def __init__(self, pdf_file, vectorstore_type='chroma'):
         """
-        Initialize with either 'chroma' or 'faiss' for vectorstore_type
+        Initialize the SpanLLM with a PDF file and a vectorstore backend.
+
+        Args:
+            pdf_file (BytesIO): The uploaded PDF file to process.
+            vectorstore_type (str): Type of vectorstore to use ('chroma' or 'faiss').
+
+        Raises:
+            ValueError: If an invalid vectorstore type is provided.
         """
         # Process PDF
         file_bytes = pdf_file.getvalue()
@@ -91,7 +102,15 @@ class SpanLLM:
         self.memory = ConversationBufferMemory(return_messages=True)
 
     def get_response(self, user_input):
-        """Generates a response using the retriever and conversation memory."""
+        """
+        Generates a response to a user query using retrieved document context and conversation history.
+
+        Args:
+            user_input (str): The user's question or query.
+
+        Returns:
+            str: A concise, finance-specific response generated from document content.
+        """
         context = self.retriever.invoke(user_input)
         history = self.memory.buffer
 
@@ -109,7 +128,13 @@ class SpanLLM:
         return parsed_response
 
 class ArithmeticLLM:
+    """
+    A lightweight language model for parsing and computing answers to arithmetic-related financial questions.
+    """
     def __init__(self):
+        """
+        Initialize the ArithmeticLLM with a prompt and model for mathematical query parsing.
+        """
         # Initialize LLM
         self.model = ChatOpenAI(
             temperature=0,
@@ -144,7 +169,17 @@ class ArithmeticLLM:
         )
 
     def get_response(self, question, context):
-        """Generates a structured response for mathematical queries."""
+        """
+        Parses and computes a structured response for mathematical queries based on context.
+
+        Args:
+            question (str): The arithmetic question to be answered.
+            context (str): The relevant document context containing numerical data.
+
+        Returns:
+            dict: A dictionary with keys - 'Operation', 'Values', 'Formula', 'Answer'.
+        """
+
         formatted_prompt = self.prompt.format_messages(
             context=context,
             question=question

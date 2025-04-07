@@ -9,7 +9,15 @@ UNSTRUCTURED_API_KEY = os.getenv("UNSTRUCTURED_API_KEY")
 
 def get_data(file_bytes):
     """
-    Process a PDF file using the Unstructured API to extract tables and text content.
+    Send PDF file bytes to the Unstructured API and extract tables and text content.
+
+    Args:
+        file_bytes (bytes): The binary content of a PDF file.
+
+    Returns:
+        tuple: A tuple containing two lists:
+            - tables (list): List of HTML strings representing extracted tables.
+            - texts (list): List of strings representing extracted text content.
     """
     headers = {
         "Accept": "application/json",

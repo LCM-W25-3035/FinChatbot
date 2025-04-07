@@ -6,6 +6,19 @@ from langchain_openai import ChatOpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 def get_summary(tables, texts):
+    """
+    Generates concise financial summaries for both table and text data using a language model.
+
+    Args:
+        tables (list): A list of table data (typically HTML or structured text) to be summarized.
+        texts (list): A list of textual narrative content to be summarized.
+
+    Returns:
+        tuple: A tuple containing:
+            - table_summaries (list): A list of one-paragraph financial summaries for each table.
+            - text_summaries (list): A list of one-paragraph financial summaries for each text block.
+    """
+    
     prompt_text = '''   
     Generate a concise and accurate financial summary of a company's performance in a single paragraph based on the provided data, the data can be either table or a text. \
     Each row of the data should be individually analyzed, ensuring that all relevant values and trends are considered. The summary should report precise values and trends directly from the data, emphasizing critical metrics such as revenue, profit, growth trends, significant changes, and anomalies. \
