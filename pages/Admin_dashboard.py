@@ -112,50 +112,59 @@ def delete_user_pdfs(user_id):
 def main():
     st.title("Admin Dashboard")
 
-    # Ensure admin access
-    if "is_admin" not in st.session_state or not st.session_state["is_admin"]:
-        st.error("Unauthorized access! Admins only.")
-        st.stop()
+    if not is_admin():
+        return
 
     users = fetch_users()
+    display_users_with_controls(users)
 
-    # Display each user with actions
-    for user in users:
-        user_id = user.get('u_id', 'N/A')
-        user_email = user.get('u_email', 'N/A')
-        user_name = user.get('u_name', 'N/A')
-        user_address = user.get('u_address', 'N/A')
-        approved_status = user.get('approved', 'Pending')
-
-        with st.expander(f"User: {user_email}"):
-            st.write(f"User ID: {user_id}")
-            st.write(f"Name: {user_name}")
-            st.write(f"Address: {user_address}")
-            st.write(f"Status: {approved_status}")
-
-            # Approve or Disapprove users
-            if approved_status == 'Pending':
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button(f"Approve {user_email}", key=f"approve_{user_id}"):
-                        update_user_status(user_id, "Approved")
-                with col2:
-                    if st.button(f"Disapprove {user_email}", key=f"disapprove_{user_id}"):
-                        update_user_status(user_id, "Disapproved")
-
-            if approved_status == 'Approved':
-                action = st.radio("Select Action", ("Edit", "Delete"), key=f"action_{user_id}")
-
-                if action == "Edit":
-                    edit_user_section(user_id)
-
-                elif action == "Delete":
-                    delete_user_pdfs(user_id)
-
-    # Logout button
     if st.button("Logout"):
         st.session_state["is_admin"] = False
         st.rerun()
+
+
+def is_admin():
+    if "is_admin" not in st.session_state or not st.session_state["is_admin"]:
+        st.error("Unauthorized access! Admins only.")
+        st.stop()
+        return False
+    return True
+
+
+def display_users_with_controls(users):
+    for user in users:
+        user_id = user.get('u_id', 'N/A')
+        user_email = user.get('u_email', 'N/A')
+        with st.expander(f"User: {user_email}"):
+            display_user_info(user)
+            display_user_actions(user)
+
+
+def display_user_info(user):
+    st.write(f"User ID: {user.get('u_id', 'N/A')}")
+    st.write(f"Name: {user.get('u_name', 'N/A')}")
+    st.write(f"Address: {user.get('u_address', 'N/A')}")
+    st.write(f"Status: {user.get('approved', 'Pending')}")
+
+
+def display_user_actions(user):
+    user_id = user.get('u_id')
+    user_email = user.get('u_email')
+    status = user.get('approved', 'Pending')
+
+    if status == 'Pending':
+        col1, col2 = st.columns(2)
+        if col1.button(f"Approve {user_email}", key=f"approve_{user_id}"):
+            update_user_status(user_id, "Approved")
+        if col2.button(f"Disapprove {user_email}", key=f"disapprove_{user_id}"):
+            update_user_status(user_id, "Disapproved")
+
+    elif status == 'Approved':
+        action = st.radio("Select Action", ("Edit", "Delete"), key=f"action_{user_id}")
+        if action == "Edit":
+            edit_user_section(user_id)
+        elif action == "Delete":
+            delete_user_pdfs(user_id)
 
 # Edit user and PDFs section
 def edit_user_section(user_id):

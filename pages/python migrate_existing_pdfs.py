@@ -59,9 +59,7 @@ def normalize_pdf_files(pdf_list, u_id):
 
 def normalize_size_field(pdf, u_id):
     try:
-        if isinstance(pdf["size"], float):
-            pdf["size"] = Decimal(str(pdf["size"]))
-        elif isinstance(pdf["size"], (int, str)):
+        if isinstance(pdf["size"], (float, int, str)):
             pdf["size"] = Decimal(str(pdf["size"]))
     except Exception:
         print(f"Warning: Could not convert size to Decimal for user {u_id}, file: {pdf.get('filename')}")
