@@ -1,0 +1,6 @@
+README.md
+setup.py
+src/FinChatbot.egg-info/PKG-INFO
+src/FinChatbot.egg-info/SOURCES.txt
+src/FinChatbot.egg-info/dependency_links.txt
+src/FinChatbot.egg-info/top_level.txt
