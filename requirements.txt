@@ -15,5 +15,6 @@ boto3
 botocore
 ipython
 openai
+pypdf
 
 -e .

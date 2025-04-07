@@ -1,6 +1,5 @@
 import streamlit as st
-from FinChatbot.pipeline.llm_chain import (ArithmeticLLM,
-                                           SpanLLM)
+from FinChatbot.pipeline.llm_chain import (ArithmeticLLM, SpanLLM)
 from FinChatbot.pipeline.classification import model_predict
 from FinChatbot.pipeline.model_classification import predict_query
 import os
@@ -10,18 +9,17 @@ from datetime import datetime, timezone
 
 # Initialize DynamoDB client
 boto3.setup_default_session(region_name='us-east-2')
-
 dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+
+load_dotenv(find_dotenv())
 USER_TABLE = os.getenv("USER_TABLE")
 SESSION_TABLE = os.getenv("SESSION_TABLE")
+unstructured_api_url = os.getenv("UNSTRUCTURED_API_URL")
+unstructured_api_key = os.getenv("UNSTRUCTURED_API_KEY")
+
 user_table = dynamodb.Table(USER_TABLE)
 session_table = dynamodb.Table(SESSION_TABLE)
 
-
-load_dotenv(find_dotenv())
-
-unstructured_api_url = os.getenv("UNSTRUCTURED_API_URL")
-unstructured_api_key = os.getenv("UNSTRUCTURED_API_KEY")
 
 # Authentication and Session Management
 def authenticate_user():
@@ -38,7 +36,6 @@ def handle_logout():
 
 def fetch_session_history(u_id):
     try:
-        # Modified to scan with filter instead of querying an index
         response = session_table.scan(
             FilterExpression='u_id = :u',
             ExpressionAttributeValues={':u': u_id}
@@ -52,31 +49,25 @@ def display_session_history():
     st.sidebar.header("Session Management")
     sessions = fetch_session_history(st.session_state["u_id"])
     session_options = [f"Session {i+1} ({len(session['questions'])} Qs)" 
-                     for i, session in enumerate(sessions)]
+                       for i, session in enumerate(sessions)]
     
-    # Display current session info
     if "s_id" in st.session_state:
-        st.sidebar.write(f"**Current Session:**")
+        st.sidebar.write("*Current Session:*")
         st.sidebar.write(f"ID: {st.session_state['s_id'][-8:]}")
-    
-    # Session selector
+
     selected_session = st.sidebar.selectbox(
         "Load previous session or create new:",
         ["New Session"] + session_options,
         key="session_selector"
     )
-    
+
     if selected_session == "New Session":
-        # Initialize new session
         st.session_state["s_id"] = f"{st.session_state['u_id']}-{datetime.now(timezone.utc).isoformat()}"
         st.session_state["messages"] = []
     else:
-        # Load existing session
         selected_index = session_options.index(selected_session)
         selected_session_data = sessions[selected_index]
         st.session_state["s_id"] = selected_session_data["s_id"]
-        
-        # Rebuild chat history
         messages = []
         for q, a in zip(selected_session_data.get("questions", []), 
                         selected_session_data.get("answers", [])):
@@ -87,16 +78,14 @@ def display_session_history():
 def store_session_in_dynamodb(u_id, s_id, question, answer):
     try:
         response = session_table.get_item(Key={"s_id": s_id})
-        
         if "Item" in response:
-            # Update existing session
             session_table.update_item(
                 Key={"s_id": s_id},
                 UpdateExpression="""
-                SET 
-                    questions = list_append(questions, :q), 
-                    answers = list_append(answers, :a),
-                    last_updated = :now
+                    SET 
+                        questions = list_append(questions, :q), 
+                        answers = list_append(answers, :a),
+                        last_updated = :now
                 """,
                 ExpressionAttributeValues={
                     ":q": [question],
@@ -105,7 +94,6 @@ def store_session_in_dynamodb(u_id, s_id, question, answer):
                 }
             )
         else:
-            # Create new session
             session_table.put_item(
                 Item={
                     "s_id": s_id,
@@ -119,28 +107,18 @@ def store_session_in_dynamodb(u_id, s_id, question, answer):
     except Exception as e:
         st.error(f"Failed to store session data: {e}")
 
-# Main Application
-def main():
-    st.title("Fin-Tech ChatBot")
-    
-    # Authentication
-    authenticate_user()
-    handle_logout()
-    
-    # Initialize session
+# Refactored helper functions
+def initialize_session():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "s_id" not in st.session_state:
         st.session_state["s_id"] = f"{st.session_state['u_id']}-{datetime.now(timezone.utc).isoformat()}"
-    
-    # Session management sidebar
     display_session_history()
-    
-    # PDF processing
+
+def handle_pdf_processing():
     with st.sidebar:
         st.header("Document Processing")
         pdf_file = st.file_uploader("Upload PDF", type=["pdf"])
-        
         if pdf_file and st.button("Process Document"):
             with st.spinner("Processing..."):
                 try:
@@ -150,49 +128,52 @@ def main():
                 except Exception as e:
                     st.error(f"Failed to process document: {e}")
 
-    # Display chat messages
+def display_chat_history():
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Chat input processing
+def handle_chat_input():
     if "span_chain" in st.session_state:
         if prompt := st.chat_input("Ask your financial question..."):
-            # Add user message to chat
             st.session_state.messages.append({"role": "user", "content": prompt})
-            
             with st.chat_message("user"):
                 st.markdown(prompt)
 
             with st.chat_message("assistant"):
                 with st.spinner("Analyzing..."):
                     try:
-                        # Classify and process query
                         query_type = model_predict(prompt)
-                        
                         if query_type == "span":
                             response = st.session_state["span_chain"].get_response(prompt)
                         elif query_type == "arithmetic":
                             context = st.session_state["span_chain"].retriever.invoke(prompt)
                             whole_response = st.session_state["arithmetic_chain"].get_response(prompt, context)
                             response = whole_response["Answer"]
-                        
-                        # Display and store response
+
                         st.markdown(response)
                         st.session_state.messages.append({"role": "assistant", "content": response})
-                        
-                        # Persist to DynamoDB
+
                         store_session_in_dynamodb(
                             st.session_state["u_id"],
                             st.session_state["s_id"],
                             prompt,
                             response
                         )
-                        
                     except Exception as e:
                         st.error(f"Error processing query: {e}")
     else:
         st.info("Please upload and process a PDF document to begin.")
+
+# Main App
+def main():
+    st.title("Fin-Tech ChatBot")
+    authenticate_user()
+    handle_logout()
+    initialize_session()
+    handle_pdf_processing()
+    display_chat_history()
+    handle_chat_input()
 
 if __name__ == "__main__":
     main()
